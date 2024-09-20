@@ -16,7 +16,8 @@ import java.util.*;
  */
 public class TEASERClassifierRealtime extends Classifier {
 
-  public double max_prediction_time = 0; // beim Training wird gemessen, wie schnell die prediction ist, damit der Classifier für die Prediction angepasst werden kann. (in milliseconds)
+  public double max_prediction_time = 0; // langsamster der 4 Trainings Predictions (in milliseconds)
+  public double min_prediction_frequency = Double.MAX_VALUE; // mit einem fit_and_measure() messen wir die minimale prediction frequenz auf den trainingsdaten
 
   /**
    * The parameters for the one-class SVM
@@ -132,6 +133,30 @@ public class TEASERClassifierRealtime extends Classifier {
 
     // train the shotgun models for different offsets
     this.model = fitTeaser(trainSamples);
+
+    // return score
+    return model.score;
+  }
+
+  public Score fit_and_measure(final TimeSeries[] trainingSamples) {
+    // train the shotgun models for different offsets
+    this.model = fitTeaser(trainingSamples);
+
+    // die minimale prediction frequenz bestimmen
+    double average_prediction_time_per_ts = (max_prediction_time / 1000000) / trainingSamples.length; // in ms
+    double fit_predict_frequency = 1 / ((average_prediction_time_per_ts / trainingSamples[0].getLength()) / 1000); // versuche die maximale prediction time messen, weil ich dadurch die geringste frequenz erhalte, und meine bekannte frequenz (fitting) darf nicht größer sein als die prediction frequenz sonst schätze ich die Prediction als zu schnell ein und die Anpassungen sind nicht stark genug.
+    
+    // test prediction auf den trainsamples (um die langsamste frequenz zu finden)
+    double max_train_pred_duration = 0;
+    for(TimeSeries trainSeries : trainingSamples) {
+      long startTimetrainpred = System.nanoTime();
+      Double[] pred = predict(new TimeSeries[]{trainSeries});
+      long estimatedTimetrainpred = System.nanoTime() - startTimetrainpred;
+      double estimatedMilliSecondstrainpred = (double) estimatedTimetrainpred / 1000000;
+      max_train_pred_duration = max_train_pred_duration > estimatedMilliSecondstrainpred ? max_train_pred_duration : (double) estimatedMilliSecondstrainpred;
+    }
+    double min_train_predict_frequency = 1 / ((max_train_pred_duration / trainingSamples[0].getLength()) / 1000);
+    min_prediction_frequency = Math.min(min_train_predict_frequency, fit_predict_frequency); // kleinere Frequenz finden
 
     // return score
     return model.score;
@@ -283,9 +308,31 @@ public class TEASERClassifierRealtime extends Classifier {
   // nur für Predictions einer einzelnen TS
   public Double[] predict_and_measure(final TimeSeries[] testSamples, double frequency) {
     // hier die Parameter anpassen
-
+    
+    // Measure the prediction time
+    long startTime = System.nanoTime();
     OffsetPrediction temp = predict(testSamples, true);
-    return new Double[]{temp.labels[0], temp.offset, (double) temp.correct, (double) temp.N};
+    long estimatedTime = System.nanoTime() - startTime;
+    double estimatedMilliSeconds = (double) estimatedTime / 1000000; //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
+
+    return new Double[]{temp.labels[0], temp.offset, (double) temp.correct, (double) temp.N, estimatedMilliSeconds};
+  }
+
+  // debugging function
+  public void printJVMMemory() {
+    // Runtime-Instanz abrufen
+    Runtime runtime = Runtime.getRuntime();
+
+    // Maximaler Heap-Speicher (in Bytes)
+    long maxHeapSize = runtime.maxMemory();
+    // Aktuell verwendeter Heap-Speicher (in Bytes)
+    long usedHeapSize = runtime.totalMemory() - runtime.freeMemory();
+
+    //System.out.println("Maximaler Heap-Speicher: " + maxHeapSize / (1024 * 1024) + " MB");
+    //System.out.println("Aktuell verwendeter Heap-Speicher: " + usedHeapSize / (1024 * 1024) + " MB");
+    if(usedHeapSize > maxHeapSize * 0.9) {
+      System.out.println("Heap Speicher wird knapp");
+    }
   }
 
   private OffsetPrediction predict(
@@ -313,7 +360,8 @@ public class TEASERClassifierRealtime extends Classifier {
     //}
     //System.out.println();
     //System.out.println(Arrays.toString(extractUntilOffset(testSamples, model.offsets[2], true)[0].getData()));
-
+    printJVMMemory();
+    
     predict:
     for (int s = 0; s < model.slaveModels.length; s++) { // S + 1 Wealsel (slaves) (im normalfall 21) mit jedem durchlauf wurde auf 5% mehr daten trainiert
       if (model.masterModels[s] != null) { // array mit trainierten oneClassSVMs (trainingsdaten in 5% schnitten ansteigend) // die ersten beiden werden nicht trainiert (0,1 sind null)
@@ -321,8 +369,8 @@ public class TEASERClassifierRealtime extends Classifier {
         TimeSeries[] data = extractUntilOffset(testSamples, model.offsets[s], testing); // die ersten beiden werte sind -1 // ich habe immer nur 1 TS gleichzeitig
 
         // Ausgabe aktueller Snapshot
-        if(testing) {System.out.println("My s: " + s);}
-        if(testing) { // gekürzte TS ausgeben
+        if(false) {System.out.println("My s: " + s);}
+        if(false) { // gekürzte TS ausgeben
           for(TimeSeries ts : data) {
             for(Double d : ts.getData()) {
               System.out.print(d);
@@ -338,7 +386,7 @@ public class TEASERClassifierRealtime extends Classifier {
         Predictions result = this.slaveClassifier.predictProbabilities(data); //  wahrscheinlichkeiten pro Klasse
         long estimatedTimeSlave = System.nanoTime() - startTimeSlave;
         //if(!testing) {max_prediction_time = max_prediction_time > estimatedTimeSlave ? max_prediction_time : (double) estimatedTimeSlave;} // längste prediction dauer speichern
-        if(true) { // testing, sonst wird auch beim fitten die Zeit des Slaves ausgegeben
+        if(false) { // testing, sonst wird auch beim fitten die Zeit des Slaves ausgegeben
           System.out.print("Slave Duration: ");
           System.out.println((double) estimatedTimeSlave / 1000000); //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
         }
@@ -354,7 +402,7 @@ public class TEASERClassifierRealtime extends Classifier {
                 model.masterModels[s],
                 generateFeatures(probabilities, result.realLabels)); // SVM berechnet, ob predicted wird // ist -1.0 oder 1.0 
             long estimatedTimeMaster = System.nanoTime() - startTimeMaster;
-            if(testing) { // testing, sonst wird auch beim fitten die Zeit des Masters ausgegeben
+            if(false) { // testing, sonst wird auch beim fitten die Zeit des Masters ausgegeben
               System.out.print("Master Duration: ");
               System.out.println((double) estimatedTimeMaster / 1000000); //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
             }
@@ -369,7 +417,7 @@ public class TEASERClassifierRealtime extends Classifier {
                   || model.offsets[s] >= testSamples[ind].getLength()) { 
                 predictedLabels[ind] = predictedLabel; // Prediction festlegen
 
-                if(testing) {System.out.println("PREDICTION");}
+                //if(testing) {System.out.println("PREDICTION");}
 
                 for(int i = 0; i < data.length; i++) {
                   if(testing) {

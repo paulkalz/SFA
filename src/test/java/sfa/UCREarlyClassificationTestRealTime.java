@@ -31,7 +31,7 @@ public class UCREarlyClassificationTestRealTime {
           //"ECG200",
           //"GunPoint",
           //"SonyAIBORobotSurface1",
-          "DodgerLoopDay", // acc = 54%, weil heaperror
+          //"DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
   };
   public static String[] datasets2 = new String[]{ 
@@ -198,7 +198,7 @@ public class UCREarlyClassificationTestRealTime {
   // helper function
   public void printtooutputfile(String s) {
     try {
-      Files.write(Paths.get("C:\\Path"), s.getBytes(), StandardOpenOption.APPEND);
+      Files.write(Paths.get("SFA\\measurements.txt"), s.getBytes(), StandardOpenOption.APPEND);
     }catch (IOException e) {
       System.out.println("Exception while writing to outputfile");
     }
@@ -238,35 +238,17 @@ public class UCREarlyClassificationTestRealTime {
               TEASERClassifierRealtime.S = 20.0;
               //TEASERClassifierRealtime.PRINT_EARLINESS = true;
 
+              // Modell trainieren
+              Classifier.Score scoreT = t.fit_and_measure(trainSamples); // fit_and_measure trainiert Teaser und misst die minimale prediction frequenz auf den trainingdaten (t.min_prediction_frequency)
               
-              //TimeSeries[] trainSamplesSelection = Arrays.copyOfRange(trainSamples, 0, min(40, trainSamples.length));
-              //Classifier.Score scoreT = t.fit(trainSamplesSelection);
-              Classifier.Score scoreT = t.fit(trainSamples); // Modell trainieren
+              double min_fitfrequency = t.min_prediction_frequency;
+              double samplingrate = datasetFrequencys.getOrDefault(s, 0.0);
+              System.out.println("Dataset samplingrate: " + samplingrate + " | minimal fitting prediction frequency: " + min_fitfrequency);
+              
               TimeSeries[] testSamplesSelection = Arrays.copyOfRange(testSamples, 0, testSamples.length); // einige Zeitreihen zum testen auswählen (aktuell benutze ich alle)
-              //  for (TimeSeries timeSeries : testSamplesSelection) {
-              //      System.out.println(Arrays.toString(timeSeries.getData())); // Zeitreihe ausgeben
-              //  }
-
-              // TODO eigene Methode
-              double average_prediction_time_per_ts = (t.max_prediction_time / 1000000) / trainSamples.length;
-              System.out.println(average_prediction_time_per_ts);
-              double fitfrequency = 1 / ((average_prediction_time_per_ts / trainSamples[0].getLength()) / 1000); // versuche die maximale prediction time messen, weil ich dadurch die geringste frequenz erhalte, und meine bekannte frequenz (fitting) darf nicht größer sein als die prediction frequenz sonst schätze ich die Prediction als zu schnell ein und die Anpassungen sind nicht stark genug.
-
-              // test prediction auf den trainsamples (um die langsamste frequenz zu finden)
-              double max_train_pred_duration = 0;
-              for(TimeSeries trainSeries : trainSamples) {
-                long startTimetrainpred = System.nanoTime();
-                Double[] pred1 = t.predict(new TimeSeries[]{trainSeries});
-                long estimatedTimetrainpred = System.nanoTime() - startTimetrainpred;
-                double estimatedMilliSecondstrainpred = (double) estimatedTimetrainpred / 1000000;
-                max_train_pred_duration = max_train_pred_duration > estimatedMilliSecondstrainpred ? max_train_pred_duration : (double) estimatedMilliSecondstrainpred;
-              }
-              double min_train_predict_frequency = 1 / ((max_train_pred_duration / trainSamples[0].getLength()) / 1000);
-              double min_fit_frequency = Math.min(min_train_predict_frequency, fitfrequency);
 
               // write name of dataset to outputfile
-              double samplingrate = datasetFrequencys.getOrDefault(s, 0.0);
-              printtooutputfile(s + " (" + min_fit_frequency + ") " + samplingrate + '\n');
+              printtooutputfile(s + " (" + samplingrate + ") " + min_fitfrequency + '\n');
 
               // zählen, wie viele TS richtig predicted wurden, um die acc zu ermitteln
               double correct_prediction = 0;
@@ -274,19 +256,10 @@ public class UCREarlyClassificationTestRealTime {
               System.out.println("Start the Prediction");
               for(TimeSeries timeSeries : testSamplesSelection) { // einzelne Zeitreihen Predicten, um die Earliness mit einzurechnen
 
-                System.out.println("Current TimeSeries: ");
-                for(Double point : timeSeries.getData()) {
-                  System.out.print(point);
-                  System.out.print(" ");
-                }
-                System.out.println();
-
                 // Prediction
-                long startTime = System.nanoTime();
                 Double[] pred = t.predict_and_measure(new TimeSeries[]{timeSeries}, 120); // Prediction machen (für eine TS)
-                long estimatedTime = System.nanoTime() - startTime;
-                double estimatedMilliSeconds = (double) estimatedTime / 1000000; //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
 
+                double estimatedMilliSeconds = pred[4]; // pred[4] ist die dauer der Prediction in Ms
                 correct_prediction += pred[2];
 
                 // Terminal Outputs
@@ -298,7 +271,7 @@ public class UCREarlyClassificationTestRealTime {
                 // log frequency to outputfile
                 printtooutputfile(String.valueOf(frequency) + ' ');
 
-                System.out.println("Predicted Label: " + pred[0].toString() + "  /  Correct Label: " + timeSeries.getLabel().toString());
+                //System.out.println("Predicted Label: " + pred[0].toString() + "  /  Correct Label: " + timeSeries.getLabel().toString());
                 //System.out.println(pred[0] + "  " + pred[1]);
               }
 
@@ -321,5 +294,10 @@ public class UCREarlyClassificationTestRealTime {
     } finally {
       TimeSeries.APPLY_Z_NORM = true; // FIXME static variable breaks some test cases!
     }
+  }
+
+  public static void main(String[] args) throws IOException {
+    UCREarlyClassificationTestRealTime ucr = new UCREarlyClassificationTestRealTime();
+    ucr.testUCRClassification();
   }
 }
