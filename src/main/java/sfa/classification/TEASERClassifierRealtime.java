@@ -18,6 +18,7 @@ public class TEASERClassifierRealtime extends Classifier {
 
   public double max_prediction_time = 0; // langsamster der 4 Trainings Predictions (in milliseconds)
   public double min_prediction_frequency = Double.MAX_VALUE; // mit einem fit_and_measure() messen wir die minimale prediction frequenz auf den trainingsdaten
+  private boolean skip = false; // damit kann die Prediction einzelner Snapshots übersprungen werden, um databacklogs zu verhindern
 
   /**
    * The parameters for the one-class SVM
@@ -166,8 +167,11 @@ public class TEASERClassifierRealtime extends Classifier {
     try {
 
       int min = Math.max(3, MIN_WINDOW_LENGTH); // ist 3
-      int max = getMax(samples, MAX_WINDOW_LENGTH); // Integer.MAX_VALUE // ist min(maxwindowlen(250) oder die länge der längsten TS)
-      double step = max / S; // steps of 5% // mindestens 12,5
+      int max = getMax(samples, MAX_WINDOW_LENGTH); // Integer.MAX_VALUE // ist min(maxwindowlen(250), länge der längsten TS)
+      for (TimeSeries ts : samples) { // die for-loop ist von mir damit die gesamte TS betrachtet werden kann
+        max = Math.max(ts.getLength(), max);
+      }
+      double step = max / S; // steps of 5% // maximal 12,5 bei S=20 und WindowLen=250
 
       this.model = new EarlyClassificationModel();
 
@@ -305,17 +309,54 @@ public class TEASERClassifierRealtime extends Classifier {
     return predict(testSamples, true).labels;
   }
 
+  public Double[][] predict_and_measure_dataset(final TimeSeries[] timeSeriesDataset, double datasetFrequency, String resamplingStrategy) {   
+    int correct_prediction = 0;
+    double average_earliness = 0;
+    Double[] seriesFrequencys = new Double[timeSeriesDataset.length];
+    for(int i = 0; i < timeSeriesDataset.length; i++) {
+      TimeSeries timeSeries = timeSeriesDataset[i];
+      Double[] result = predict_and_measure(new TimeSeries[]{timeSeries}, datasetFrequency, resamplingStrategy);
+
+      seriesFrequencys[i] = 1 / ((result[4] / (timeSeries.getLength() * result[1])) / 1000);
+      correct_prediction += result[2];
+      average_earliness += result[1];
+    }
+    double datasetAccuracy = ((double) correct_prediction / (double) timeSeriesDataset.length);
+    average_earliness = average_earliness / (double) timeSeriesDataset.length;
+    System.out.println("Average Earliness: " + average_earliness);
+    double average_frequency = 0;
+    for(double freq : seriesFrequencys) {
+      average_frequency += freq;
+    }
+    average_frequency = average_frequency / (double) seriesFrequencys.length;
+    System.out.println("Average Frequency: " + average_frequency);
+
+    return new Double[][] {new Double[] {datasetAccuracy}, seriesFrequencys, new Double[] {average_earliness}, new Double[] {average_frequency}};
+    // accuracy of the dataset, array with the reached prediction frequency for each timeseries in the dataset, average earliness, average prediction frequency
+  }
+
   // nur für Predictions einer einzelnen TS
-  public Double[] predict_and_measure(final TimeSeries[] testSamples, double frequency) {
+  public Double[] predict_and_measure(TimeSeries[] testSamples, double frequency, String resamplingStrategy) {
     // hier die Parameter anpassen
+    switch (resamplingStrategy) {
+      case "odds":
+          skip = true;
+        break;
+    
+      default:
+          skip = false;
+        break;
+    }
     
     // Measure the prediction time
     long startTime = System.nanoTime();
     OffsetPrediction temp = predict(testSamples, true);
     long estimatedTime = System.nanoTime() - startTime;
     double estimatedMilliSeconds = (double) estimatedTime / 1000000; //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
+    //System.out.println("Prediction Time in Ms: " + estimatedMilliSeconds + " | Earliness: " + temp.offset);
 
     return new Double[]{temp.labels[0], temp.offset, (double) temp.correct, (double) temp.N, estimatedMilliSeconds};
+    // Predicted Label, offset = used percentage of TS length (= earliness), number of correct prediction (0 or 1), number of TS in Dataset (1), duration of the prediction
   }
 
   // debugging function
@@ -360,52 +401,38 @@ public class TEASERClassifierRealtime extends Classifier {
     //}
     //System.out.println();
     //System.out.println(Arrays.toString(extractUntilOffset(testSamples, model.offsets[2], true)[0].getData()));
-    printJVMMemory();
-    
+    //printJVMMemory();
+    long startTimePred = System.nanoTime();
+
     predict:
     for (int s = 0; s < model.slaveModels.length; s++) { // S + 1 Wealsel (slaves) (im normalfall 21) mit jedem durchlauf wurde auf 5% mehr daten trainiert
+      //if(testing && skip && s % 2 == 0){continue;} // jeden zweiten Snapshot überspringen
+      if(testing && skip && s < 15){continue;} // die ersten 10 Snapshots überspringen // damit verkaufe ich die earliness
+      // aktuellen Snapshot überspringen, wenn wir zu langsam sind (letzter Snapshot hatte zu geringe frequenz) // Backlog verhindern
+      // muss noch sichergehen, dass s wirklich immer nur bis 21 geht. Verstehe nicht wie die Earliness 0.19 sein kann, wenn ich die ersten 10 Snapshots überspringe 1250 Samples (eoghorizontalsignal)
+      // -> vermute das ist wegen der windowlength (muss mir nochmal die earlinessberechnung anschauen)
+      // maxwindowlen auf 250 lässt nur 500 datenpunkte zur klassifikation zu. (das sollte es so nicht geben, ev. wegen performance)
+
       if (model.masterModels[s] != null) { // array mit trainierten oneClassSVMs (trainingsdaten in 5% schnitten ansteigend) // die ersten beiden werden nicht trainiert (0,1 sind null)
+        if(false) {System.out.println("My s: " + s);}
+        
         // extract samples of length offset
         TimeSeries[] data = extractUntilOffset(testSamples, model.offsets[s], testing); // die ersten beiden werte sind -1 // ich habe immer nur 1 TS gleichzeitig
-
-        // Ausgabe aktueller Snapshot
-        if(false) {System.out.println("My s: " + s);}
-        if(false) { // gekürzte TS ausgeben
-          for(TimeSeries ts : data) {
-            for(Double d : ts.getData()) {
-              System.out.print(d);
-              System.out.print(" ");
-            }
-          }
-          System.out.println();
-        }
+        //if(testing) {System.out.println(data[0].getLength());}
 
         // Slave Classification
         this.slaveClassifier.setModel(model.slaveModels[s]); // TODO ugly
-        long startTimeSlave = System.nanoTime();
         Predictions result = this.slaveClassifier.predictProbabilities(data); //  wahrscheinlichkeiten pro Klasse
-        long estimatedTimeSlave = System.nanoTime() - startTimeSlave;
-        //if(!testing) {max_prediction_time = max_prediction_time > estimatedTimeSlave ? max_prediction_time : (double) estimatedTimeSlave;} // längste prediction dauer speichern
-        if(false) { // testing, sonst wird auch beim fitten die Zeit des Slaves ausgegeben
-          System.out.print("Slave Duration: ");
-          System.out.println((double) estimatedTimeSlave / 1000000); //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
-        }
 
         for (int ind = 0; ind < data.length; ind++) { // data sind die TS aus testSamples aber gekürzt nach dem Offset // loop einmal pro TS
           if (predictedLabels[ind] == null) { // in den ersten beiden iterationen
             double predictedLabel = result.labels[ind]; // label von Weasel predicted
             double[] probabilities = result.probabilities[ind]; // die Wahrscheinlichkeiten aller Klassen von weasel predicted
 
-            // Master Klassifikation // mit Zeitausgabe
-            long startTimeMaster = System.nanoTime();
+            // Master Klassifikation
             double predictNow = svm.svm_predict(
                 model.masterModels[s],
                 generateFeatures(probabilities, result.realLabels)); // SVM berechnet, ob predicted wird // ist -1.0 oder 1.0 
-            long estimatedTimeMaster = System.nanoTime() - startTimeMaster;
-            if(false) { // testing, sonst wird auch beim fitten die Zeit des Masters ausgegeben
-              System.out.print("Master Duration: ");
-              System.out.println((double) estimatedTimeMaster / 1000000); //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
-            }
 
             if (s >= S // es soll eine prediction geben
                 || model.offsets[s] >= testSamples[ind].getLength()
@@ -418,20 +445,11 @@ public class TEASERClassifierRealtime extends Classifier {
                 predictedLabels[ind] = predictedLabel; // Prediction festlegen
 
                 //if(testing) {System.out.println("PREDICTION");}
-
-                for(int i = 0; i < data.length; i++) {
-                  if(testing) {
-                    if(predictedLabels[i] == null) {
-                      System.out.print("null ");
-                    } else {
-                      System.out.print(predictedLabels[i].toString() + " ");
-                    }
-                  }
-                }
-                if(testing) {System.out.println();}
+                //if(testing) {System.out.println(model.offsets[s]);}
 
                 double earliness = Math.min(1.0, ((double) model.offsets[s] / testSamples[ind].getLength()));
                 avgOffset += earliness; 
+
                 offsets[ind] = model.offsets[s];
 
                 perClassEarliness.addTo(testSamples[ind].getLabel(), earliness); // earliness der einzelnen Klassen speichern
@@ -447,14 +465,16 @@ public class TEASERClassifierRealtime extends Classifier {
           // no predictions to be made
           if (count == testSamples.length) { // stoppen, wenn alle TS eine prediction haben
             //if(testing) {System.out.println("PREDICTION");}
+            //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // Dauer bis zur entgültigen Klassifikation
             break predict;
           }
         }
+        //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // nach jeder Snapshotklassifikation ausgeben, wie lange wir schon klasifizieren
       }
     }
 
     // per Class counts
-    if (testing) {
+    if (false) { // während entwicklung deaktiviert
       for (DoubleDoubleCursor c : perClassEarliness) {
         System.out.println("Class\t" + c.key + "\t Earliness \t" + c.value / perClassCount.get(c.key));
       }
@@ -465,9 +485,7 @@ public class TEASERClassifierRealtime extends Classifier {
     if (testing && PRINT_EARLINESS) {
       for (int ind = 0; ind < offsets.length; ind++) {
         int e = offsets[ind];
-        System.out.print(predictedLabels[ind].toString() + "   " + testSamples[ind].getLabel().toString()); // debug
         System.out.print("[" + e + "," + (compareLabels(predictedLabels[ind], testSamples[ind].getLabel()) ? "True" : "False") + "],");
-        System.out.print(""); // debug
       }
       System.out.println("");
     }

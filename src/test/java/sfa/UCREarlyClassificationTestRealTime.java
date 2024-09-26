@@ -34,6 +34,18 @@ public class UCREarlyClassificationTestRealTime {
           //"DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
   };
+  public static String[] ucr_freq_datasets = new String[]{
+          "Chinatown",
+          "DodgerLoopDay",
+          "ECG200",
+          "ECG5000",
+          "EOGHorizontalSignal",
+          "EOGVerticalSignal",
+          "GunPoint",
+          //"Phoneme",
+          "PLAID",
+          "SonyAIBORobotSurface1",
+  };
   public static String[] datasets2 = new String[]{ 
           "ArrowHead",
           "Beef", 
@@ -189,16 +201,21 @@ public class UCREarlyClassificationTestRealTime {
 
   HashMap<String, Double> datasetFrequencys = new HashMap<String, Double>() {{ // echte Samplingfrequenzen der Datasets in Hz
       put("Chinatown", 0.0002777);
+      put("DodgerLoopDay", 0.00333);
       put("ECG200", 128.0);
-      put("GunPoint", 30.0);
-      put("SonyAIBORobotSurface1", 123.0);
+      put("ECG5000", 250.0);
       put("EOGHorizontalSignal", 1000.0);
+      put("EOGVerticalSignal", 1000.0);
+      put("GunPoint", 30.0);
+      put("Phoneme", 22050.0); // ?
+      put("PLAID", 30000.0); // ?
+      put("SonyAIBORobotSurface1", 123.0);
   }};
 
   // helper function
   public void printtooutputfile(String s) {
     try {
-      Files.write(Paths.get("SFA\\measurements.txt"), s.getBytes(), StandardOpenOption.APPEND);
+      Files.write(Paths.get("SFA\\plot_measurements\\measurements.txt"), s.getBytes(), StandardOpenOption.APPEND);
     }catch (IOException e) {
       System.out.println("Exception while writing to outputfile");
     }
@@ -226,7 +243,6 @@ public class UCREarlyClassificationTestRealTime {
                 System.err.println("File " + test.getName() + " does not exist"); // error
                 test = null;
               }
-
               Classifier.DEBUG = false;
 
               // Load the train/test splits
@@ -240,49 +256,31 @@ public class UCREarlyClassificationTestRealTime {
 
               // Modell trainieren
               Classifier.Score scoreT = t.fit_and_measure(trainSamples); // fit_and_measure trainiert Teaser und misst die minimale prediction frequenz auf den trainingdaten (t.min_prediction_frequency)
-              
+              System.out.println(scoreT);
+
               double min_fitfrequency = t.min_prediction_frequency;
               double samplingrate = datasetFrequencys.getOrDefault(s, 0.0);
-              System.out.println("Dataset samplingrate: " + samplingrate + " | minimal fitting prediction frequency: " + min_fitfrequency);
+              System.out.println("Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
+              printtooutputfile(s + " " + samplingrate + " " + min_fitfrequency + '\n');
               
-              TimeSeries[] testSamplesSelection = Arrays.copyOfRange(testSamples, 0, testSamples.length); // einige Zeitreihen zum testen auswählen (aktuell benutze ich alle)
-
-              // write name of dataset to outputfile
-              printtooutputfile(s + " (" + samplingrate + ") " + min_fitfrequency + '\n');
-
-              // zählen, wie viele TS richtig predicted wurden, um die acc zu ermitteln
-              double correct_prediction = 0;
-
+              // Prediction
               System.out.println("Start the Prediction");
-              for(TimeSeries timeSeries : testSamplesSelection) { // einzelne Zeitreihen Predicten, um die Earliness mit einzurechnen
+              for(int i = 0; i < 5; i++) {
+                Double[][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, "default"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
+                System.out.println("Accuracy of the Datasetprediction(" + (i+1) + "): " + pred[0][0]);
 
-                // Prediction
-                Double[] pred = t.predict_and_measure(new TimeSeries[]{timeSeries}, 120); // Prediction machen (für eine TS)
-
-                double estimatedMilliSeconds = pred[4]; // pred[4] ist die dauer der Prediction in Ms
-                correct_prediction += pred[2];
-
-                // Terminal Outputs
-                System.out.print("Prediction Time for this Timeseries (in miliseconds): ");
-                System.out.println(estimatedMilliSeconds); 
-                System.out.print("Maximum possible Frequency (in Hertz): ");
-                double frequency = 1 / ((estimatedMilliSeconds / (timeSeries.getLength() * pred[1])) / 1000);// pred[1] = earliness (also prozent der TS, die genutzt wurde)
-                System.out.println(frequency);
-                // log frequency to outputfile
-                printtooutputfile(String.valueOf(frequency) + ' ');
-
-                //System.out.println("Predicted Label: " + pred[0].toString() + "  /  Correct Label: " + timeSeries.getLabel().toString());
-                //System.out.println(pred[0] + "  " + pred[1]);
+                // log to Outputfile
+                printtooutputfile(Arrays.toString(pred[1]));
+                printtooutputfile("\n");
               }
+              for(int i = 0; i < 5; i++) {
+                Double[][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, "odds"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
+                System.out.println("Accuracy of the Datasetprediction(" + (i+1) + "): " + pred[0][0]);
 
-              System.out.println("Accuracy of the Datasetprediction: " + (correct_prediction / testSamplesSelection.length));
-
-              //Classifier.Score scoreT = t.eval(trainSamples, testSamples);
-              //System.out.println(s + ";" + scoreT.toString());
-
-              // begin new line in Outputfile
-              printtooutputfile("\n");
-
+                // log to Outputfile
+                printtooutputfile(Arrays.toString(pred[1]));
+                printtooutputfile("\n");
+              }
             }
           }
         } else {
