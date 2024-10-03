@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
+import static java.lang.Math.max;
 import static java.lang.Math.min;
 
 @RunWith(JUnit4.class)
@@ -28,13 +29,13 @@ public class UCREarlyClassificationTestRealTime {
   // The datasets to use
   public static String[] datasets = new String[]{
           "Chinatown", // acc = 93%
-          //"ECG200",
-          //"GunPoint",
+          "ECG200",
+          "GunPoint",
           //"SonyAIBORobotSurface1",
           //"DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
   };
-  public static String[] ucr_freq_datasets = new String[]{
+  public static String[] ucr_freq_datasets = new String[]{ // 16h auf gruenau6
           "Chinatown",
           "DodgerLoopDay",
           "ECG200",
@@ -199,26 +200,53 @@ public class UCREarlyClassificationTestRealTime {
             //"Yoga" // datei ist ziemlich groß
   };
 
-  HashMap<String, Double> datasetFrequencys = new HashMap<String, Double>() {{ // echte Samplingfrequenzen der Datasets in Hz
-      put("Chinatown", 0.0002777);
-      put("DodgerLoopDay", 0.00333);
-      put("ECG200", 128.0);
-      put("ECG5000", 250.0);
-      put("EOGHorizontalSignal", 1000.0);
-      put("EOGVerticalSignal", 1000.0);
-      put("GunPoint", 30.0);
-      put("Phoneme", 22050.0); // ?
-      put("PLAID", 30000.0); // ?
-      put("SonyAIBORobotSurface1", 123.0);
+  HashMap<String, Double[]> datasetFrequencys = new HashMap<String, Double[]>() {{ // echte Samplingfrequenzen der Datasets in Hz // und min oder max value zum testen
+        put("Chinatown", new Double[] {0.0002777, 50000.0}); // 0.0002777
+      put("DodgerLoopDay", new Double[] {0.00333, 50000.0});
+      put("ECG200", new Double[] {128.0, 50000.0}); 
+      put("ECG5000", new Double[] {250.0, 50000.0});
+      put("EOGHorizontalSignal", new Double[] {1000.0, 50000.0});
+      put("EOGVerticalSignal", new Double[] {1000.0, 50000.0});
+      put("GunPoint", new Double[] {30.0, 50000.0});
+      put("Phoneme", new Double[] {22050.0, 1000.0}); // ?
+      put("PLAID", new Double[] {30000.0, 1000.0}); // ?
+      put("SonyAIBORobotSurface1", new Double[] {123.0, 50000.0});
   }};
 
   // helper function
   public void printtooutputfile(String s) {
     try {
-      Files.write(Paths.get("SFA\\plot_measurements\\measurements.txt"), s.getBytes(), StandardOpenOption.APPEND);
+      Files.write(Paths.get("plot_measurements/measurements.txt").toAbsolutePath(), s.getBytes(), StandardOpenOption.APPEND);
     }catch (IOException e) {
-      System.out.println("Exception while writing to outputfile");
+      System.out.println("Exception while writing to outputfile: " + e);
     }
+  }
+
+  public void predict_and_output(TimeSeries[] testSamples, TimeSeries[] trainSamples,String s, TEASERClassifierRealtime t, String resamplingStrategy, double samplingrate) {
+    double min_fitfrequency = t.min_prediction_frequency;
+    
+    System.out.println("Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
+              
+    // standard teaser
+    Double[][][] pred1 = t.predict_and_measure_dataset(testSamples, samplingrate, "default"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
+    System.out.println("Accuracy of the Datasetprediction( standard teaser ): " + pred1[0][0][0]);
+    // realtime teaser
+    Double[][][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, resamplingStrategy); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
+    System.out.println("Accuracy of the Datasetprediction(" + resamplingStrategy + "): " + pred[0][0][0]);
+
+    printtooutputfile(s + " " + samplingrate + " " + min_fitfrequency + " " + trainSamples[0].getLength() + " " + TEASERClassifierRealtime.S + " " + pred1[0][0][0] + " " + pred1[2][0][0] + " " + pred[0][0][0] + " " + pred[2][0][0] + '\n'); // neue dataset prediction (acc, early, acc, early)
+    // log to Outputfile (standard teaser)
+    printtooutputfile(Arrays.toString(pred1[1][0]) + "\n");
+    for(int j = 0; j < testSamples.length; j++) {
+      printtooutputfile("+" + Arrays.toString(pred1[4][j]) + "\n");
+    }
+    
+    // log to Outputfile (realtime teaser)
+    printtooutputfile(Arrays.toString(pred[1][0]) + "\n");
+    for(int j = 0; j < testSamples.length; j++) {
+      printtooutputfile("-" + Arrays.toString(pred[4][j]) + "\n");
+    }
+    //printtooutputfile("\n");          
   }
 
   @Test
@@ -251,35 +279,23 @@ public class UCREarlyClassificationTestRealTime {
 
               // The TEASER-classifier
               TEASERClassifierRealtime t = new TEASERClassifierRealtime();
-              TEASERClassifierRealtime.S = 20.0;
+
+              TEASERClassifierRealtime.S = max(20, testSamples[0].getLength() / 35); // ich will max 35 neue Datenpunkte pro snapshot und nicht weniger als 20 Snapshots
+              System.out.println("S: " + TEASERClassifierRealtime.S);
               //TEASERClassifierRealtime.PRINT_EARLINESS = true;
 
               // Modell trainieren
               Classifier.Score scoreT = t.fit_and_measure(trainSamples); // fit_and_measure trainiert Teaser und misst die minimale prediction frequenz auf den trainingdaten (t.min_prediction_frequency)
               System.out.println(scoreT);
 
-              double min_fitfrequency = t.min_prediction_frequency;
-              double samplingrate = datasetFrequencys.getOrDefault(s, 0.0);
-              System.out.println("Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
-              printtooutputfile(s + " " + samplingrate + " " + min_fitfrequency + '\n');
-              
               // Prediction
-              System.out.println("Start the Prediction");
-              for(int i = 0; i < 5; i++) {
-                Double[][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, "default"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
-                System.out.println("Accuracy of the Datasetprediction(" + (i+1) + "): " + pred[0][0]);
-
-                // log to Outputfile
-                printtooutputfile(Arrays.toString(pred[1]));
-                printtooutputfile("\n");
-              }
-              for(int i = 0; i < 5; i++) {
-                Double[][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, "odds"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
-                System.out.println("Accuracy of the Datasetprediction(" + (i+1) + "): " + pred[0][0]);
-
-                // log to Outputfile
-                printtooutputfile(Arrays.toString(pred[1]));
-                printtooutputfile("\n");
+              System.out.println("Start the Prediction"); 
+              
+              for(int i = 0; i<10; i++) { // immer 10 predictions machen
+                double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/10) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
+                predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
+                predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
+                predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
               }
             }
           }
@@ -289,6 +305,7 @@ public class UCREarlyClassificationTestRealTime {
                   "Please download datasets from [http://www.cs.ucr.edu/~eamonn/time_series_data/].");
         }
       }
+      System.out.println("Done");
     } finally {
       TimeSeries.APPLY_Z_NORM = true; // FIXME static variable breaks some test cases!
     }
