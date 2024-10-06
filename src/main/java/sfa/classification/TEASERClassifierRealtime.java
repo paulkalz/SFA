@@ -401,8 +401,8 @@ public class TEASERClassifierRealtime extends Classifier {
 
   private int nextSnapshot(double datasetFrequency, int lastSnapshot, double elapsedPredictionTimeMs) { // currentSnapshot ist der letzte bearbeitete Snapshot
     if(model.offsets[lastSnapshot] == -1) {return lastSnapshot + 1;} // es wurde noch keine Prediction gemacht
-    double currentFrequency = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000); // aktuelle prediction frequenz bestimmen (in Hz)
-    if(currentFrequency > datasetFrequency) { // wenn schnell genug, dann weitermachen
+    double currentFrequency = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000); // aktuelle prediction frequenz bestimmen (in Hz) (am letzten snapshot)
+    if(currentFrequency > datasetFrequency) { // wenn schnell genug, dann weitermachen // (hier koennte auch getestet werden, ob wir nach dem naechsten SN noch schnell genug sind)
       return lastSnapshot + 1;
     }
     // nicht schnell genug // ein databacklog muss aufgeloest werden durch ueberspringen von datenpunkten
@@ -410,10 +410,10 @@ public class TEASERClassifierRealtime extends Classifier {
       double estimated_post_skip_Snapshot_time = avgMsPerSnapshotFit[i] - avgMsPerSnapshotFit[i-1]; // zeit, die beim fitten durchschnittlich fuer Snapshot i gebraucht wurde
       currentFrequency = 1 / (((elapsedPredictionTimeMs + estimated_post_skip_Snapshot_time) / model.offsets[i]) / 1000);
       
-      if(currentFrequency > datasetFrequency) { // es ist schnell genug
+      if(currentFrequency > datasetFrequency) { // es ist nach dem skippen zu Snapshot i schnell genug
         double temp = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000);
-        System.out.println(elapsedPredictionTimeMs + " " + model.offsets[lastSnapshot]);
-        System.out.println("ZU LANGSAM -> Skippen von " + lastSnapshot + " zu " + i + " (" + currentFrequency + ") " + temp + " " + datasetFrequency);
+        //System.out.println(elapsedPredictionTimeMs + " " + model.offsets[lastSnapshot]);
+        System.out.println("ZU LANGSAM -> Skippen von " + lastSnapshot + " zu " + i + " ( von " + temp + " zu " + currentFrequency + " ) " + datasetFrequency); // current = estimation nach dem skip, temp = aktuell
         return i; // returns the next Snapshot that should be evaluated (return - currentSnapshot = number of Snapshots that should be skipped to predict with datasetFrequency)
       }
     }

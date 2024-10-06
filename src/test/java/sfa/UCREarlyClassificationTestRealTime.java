@@ -28,9 +28,10 @@ public class UCREarlyClassificationTestRealTime {
   
   // The datasets to use
   public static String[] datasets = new String[]{
-          "Chinatown", // acc = 93%
-          "ECG200",
-          "GunPoint",
+          //"Chinatown", // acc = 93%
+          //"ECG200",
+          //"GunPoint",
+          "PLAID",
           //"SonyAIBORobotSurface1",
           //"DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
@@ -209,7 +210,7 @@ public class UCREarlyClassificationTestRealTime {
       put("EOGVerticalSignal", new Double[] {1000.0, 50000.0});
       put("GunPoint", new Double[] {30.0, 50000.0});
       put("Phoneme", new Double[] {22050.0, 1000.0}); // ?
-      put("PLAID", new Double[] {30000.0, 1000.0}); // ?
+      put("PLAID", new Double[] {30000.0, 100.0}); // ?
       put("SonyAIBORobotSurface1", new Double[] {123.0, 50000.0});
   }};
 
@@ -290,12 +291,11 @@ public class UCREarlyClassificationTestRealTime {
 
               // Prediction
               System.out.println("Start the Prediction"); 
-              
-              for(int i = 0; i<10; i++) { // immer 10 predictions machen
-                double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/10) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
-                predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
-                predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
-                predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
+              for(int j = 0; j < 3; j++) {
+                for(int i = 0; i<10; i++) { // immer 10 predictions machen
+                  double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/10) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
+                  predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
+                }
               }
             }
           }

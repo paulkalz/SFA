@@ -51,7 +51,7 @@ for i in range(len(zeilen)):
         plt.grid(True)
         richtlinie = []
         richtlinie.append(0)
-        for j in range(1, int(float(headerzeile[4]))+1): # 3=lqenge 4=S
+        for j in range(1, int(float(headerzeile[4]))+1): # 3=laeenge 4=S
             richtlinie.append(((float(headerzeile[3]) / float(headerzeile[4])) * j) / (float(headerzeile[1])/ 1000)) # ms an dieser stelle bei samplingrate
         plt.plot(richtlinie, color='black', linestyle='--')
     else:
