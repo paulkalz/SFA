@@ -8,6 +8,9 @@ import org.junit.runners.JUnit4;
 import sfa.classification.Classifier;
 import sfa.classification.TEASERClassifier;
 import sfa.classification.TEASERClassifierRealtime;
+import sfa.classification.TEASERClassifierRealtimeInst;
+import sfa.classification.TEASERClassifierRealtimeManager;
+import sfa.classification.TEASERClassifierRealtimeManager.predictionResults;
 import sfa.timeseries.TimeSeries;
 import sfa.timeseries.TimeSeriesLoader;
 
@@ -28,10 +31,10 @@ public class UCREarlyClassificationTestRealTime {
   
   // The datasets to use
   public static String[] datasets = new String[]{
-          //"Chinatown", // acc = 93%
+          "Chinatown", // acc = 93%
           //"ECG200",
           //"GunPoint",
-          "PLAID",
+          //"PLAID",
           //"SonyAIBORobotSurface1",
           //"DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
@@ -202,7 +205,7 @@ public class UCREarlyClassificationTestRealTime {
   };
 
   HashMap<String, Double[]> datasetFrequencys = new HashMap<String, Double[]>() {{ // echte Samplingfrequenzen der Datasets in Hz // und min oder max value zum testen
-        put("Chinatown", new Double[] {0.0002777, 50000.0}); // 0.0002777
+      put("Chinatown", new Double[] {0.0002777, 50000.0}); // 0.0002777
       put("DodgerLoopDay", new Double[] {0.00333, 50000.0});
       put("ECG200", new Double[] {128.0, 50000.0}); 
       put("ECG5000", new Double[] {250.0, 50000.0});
@@ -223,7 +226,8 @@ public class UCREarlyClassificationTestRealTime {
     }
   }
 
-  public void predict_and_output(TimeSeries[] testSamples, TimeSeries[] trainSamples,String s, TEASERClassifierRealtime t, String resamplingStrategy, double samplingrate) {
+  // diese methoden könnten in die teaser klasse mit eingebaut werden ist als interface zu komplex // oder eine neue teaser-realtime-verwaltungsklasse machen (wahrscheinlich am besten)
+  public void predict_and_output(TimeSeries[] testSamples, TimeSeries[] trainSamples, String s, TEASERClassifierRealtime t, String resamplingStrategy, double samplingrate) {
     double min_fitfrequency = t.min_prediction_frequency;
     
     System.out.println("Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
@@ -235,7 +239,7 @@ public class UCREarlyClassificationTestRealTime {
     Double[][][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, resamplingStrategy); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
     System.out.println("Accuracy of the Datasetprediction(" + resamplingStrategy + "): " + pred[0][0][0]);
 
-    printtooutputfile(s + " " + samplingrate + " " + min_fitfrequency + " " + trainSamples[0].getLength() + " " + TEASERClassifierRealtime.S + " " + pred1[0][0][0] + " " + pred1[2][0][0] + " " + pred[0][0][0] + " " + pred[2][0][0] + '\n'); // neue dataset prediction (acc, early, acc, early)
+    printtooutputfile(s + " " + samplingrate + " " + min_fitfrequency + " " + trainSamples[0].getLength() + " " + TEASERClassifierRealtime.S + " " + String.format("%.02f", pred1[0][0][0]) + " " + String.format("%.02f", pred1[2][0][0]) + " " + String.format("%.02f", pred[0][0][0]) + " " + String.format("%.02f", pred[2][0][0]) + " " + String.format("%.02f", pred1[5][0][0]) + " " + String.format("%.02f", pred[5][0][0]) + '\n'); // neue dataset prediction (acc, early, acc, early)
     // log to Outputfile (standard teaser)
     printtooutputfile(Arrays.toString(pred1[1][0]) + "\n");
     for(int j = 0; j < testSamples.length; j++) {
@@ -281,20 +285,32 @@ public class UCREarlyClassificationTestRealTime {
               // The TEASER-classifier
               TEASERClassifierRealtime t = new TEASERClassifierRealtime();
 
-              TEASERClassifierRealtime.S = max(20, testSamples[0].getLength() / 35); // ich will max 35 neue Datenpunkte pro snapshot und nicht weniger als 20 Snapshots
-              System.out.println("S: " + TEASERClassifierRealtime.S);
+              //TEASERClassifierRealtime.S = max(20, testSamples[0].getLength() / 35); // ich will max 35 neue Datenpunkte pro snapshot und nicht weniger als 20 Snapshots
+              TEASERClassifierRealtime.S = 20;
+              //System.out.println("S: " + TEASERClassifierRealtime.S);
               //TEASERClassifierRealtime.PRINT_EARLINESS = true;
 
               // Modell trainieren
-              Classifier.Score scoreT = t.fit_and_measure(trainSamples); // fit_and_measure trainiert Teaser und misst die minimale prediction frequenz auf den trainingdaten (t.min_prediction_frequency)
-              System.out.println(scoreT);
+              //Classifier.Score scoreT = t.fit_and_measure(trainSamples); // fit_and_measure trainiert Teaser und misst die minimale prediction frequenz auf den trainingdaten (t.min_prediction_frequency)
+              //System.out.println(scoreT);
 
               // Prediction
-              System.out.println("Start the Prediction"); 
-              for(int j = 0; j < 3; j++) {
-                for(int i = 0; i<10; i++) { // immer 10 predictions machen
-                  double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/10) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
-                  predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
+              // System.out.println("Start the Prediction"); 
+              for(int j = 0; j < 1; j++) { // 1 Predictions pro Dataset
+                for(int i = 0; i<5; i++) { // immer 5 predictions machen (mit unterschiedlichen Frequenzen)
+                  double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/5) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
+                  //predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
+                  
+                  TEASERClassifierRealtimeManager manager = new TEASERClassifierRealtimeManager(testSamples, trainSamples, test_frequency);
+                  predictionResults[][] result = manager.manageRealtime(); // do training, prediction and output
+                  printtooutputfile("NewDataset:_" + s +" "+ test_frequency + " " + trainSamples[0].getLength() + "\n");
+                  for(predictionResults[] strategy : result) {
+                    //printtooutputfile(strategy[0].getTyp() + "\n"); // default, skipping, s, k
+                     for(predictionResults variant : strategy) {
+                       printtooutputfile(variant.getTyp() + " " + String.valueOf(variant.getAccuracy()) + " " + String.valueOf(variant.getEarlyness()) + " " + String.valueOf(variant.getPredictionTime()) + " " + String.valueOf(variant.isAvgRealtime()) + "\n");
+                        printtooutputfile(variant.getSnapshotTimesToString());
+                      }
+                    }
                 }
               }
             }

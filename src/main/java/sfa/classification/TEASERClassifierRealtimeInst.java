@@ -14,7 +14,7 @@ import java.util.*;
  *   Univariate classifier with WEASEL as slave
  * </p>
  */
-public class TEASERClassifierRealtime extends Classifier {
+public class TEASERClassifierRealtimeInst extends Classifier {
 
   public double max_prediction_time = 0; // langsamster der 4 Trainings Predictions (in milliseconds)
   public double min_prediction_frequency = Double.MAX_VALUE; // mit einem fit_and_measure() messen wir die minimale prediction frequenz auf den trainingsdaten
@@ -36,7 +36,7 @@ public class TEASERClassifierRealtime extends Classifier {
    * S is typically a constant set to 20, such that a prediction will be made after every 5% of the full
    * time series length.
    */
-  public static double S = 20.0;
+  public double S = 20.0; // nicht mehr static, ich brauche mehrere Objekte mit verschiedenen S werten
 
   public static boolean PRINT_EARLINESS = false;
 
@@ -48,7 +48,7 @@ public class TEASERClassifierRealtime extends Classifier {
 
   WEASELClassifier slaveClassifier;
 
-  public TEASERClassifierRealtime() {
+  public TEASERClassifierRealtimeInst() {
     slaveClassifier = new WEASELClassifier();
     WEASELClassifier.lowerBounding = true;
     WEASELClassifier.solverType = SolverType.L2R_LR;
@@ -56,13 +56,14 @@ public class TEASERClassifierRealtime extends Classifier {
 
   }
 
-  public static class EarlyClassificationModel extends Model {
+  public class EarlyClassificationModel extends Model { // nicht mehr static
     public EarlyClassificationModel() {
       super("TEASER", 0, 1, 0, 1, false, -1);
 
       this.offsets = new int[(int) S + 1];
       this.masterModels = new svm_model[(int) S + 1];
       this.slaveModels = new WEASELClassifier.WEASELModel[(int) S + 1];
+      System.out.println("DAS ECHTE S: " + this.offsets.length);
 
       Arrays.fill(this.offsets, -1);
     }
@@ -179,6 +180,7 @@ public class TEASERClassifierRealtime extends Classifier {
 
     disable_earlyness = false;
     // return score
+    model.score.avgOffset = predict(trainingSamples, true).offset / trainingSamples.length; // trainings earliness in den score schreiben
     return model.score;
   }
 
@@ -355,6 +357,18 @@ public class TEASERClassifierRealtime extends Classifier {
     }
     average_frequency = average_frequency / (double) seriesFrequencys.length;
     System.out.println("Average Frequency: " + average_frequency);
+
+    System.out.println("Average Prediction Time: " + average_prediction_time);
+    average_prediction_time = 0;
+    for(int i = 0; i < timeSeriesDataset.length; i++) {
+      int j = (int) S;
+      while(seriesSnapshotTimes[i][j] <= 0) {
+        j--;
+      }
+      average_prediction_time += seriesSnapshotTimes[i][j];
+    }
+    average_prediction_time = average_prediction_time / (double) timeSeriesDataset.length;
+    System.out.println("Average Prediction Time: " + average_prediction_time);
 
     return new Double[][][] {new Double[][] {new Double[] {datasetAccuracy}}, new Double[][] {seriesFrequencys}, new Double[][] {new Double[] {average_earliness}}, new Double[][] {new Double[] {average_frequency}}, seriesSnapshotTimes, new Double[][] {new Double[] {average_prediction_time}}};
     // accuracy of the dataset, array with the reached prediction frequency for each timeseries in the dataset, average earliness, average prediction frequency, elapsed prediction time at every Snapshotprediction for every TS, average prediction time of the dataset
