@@ -28,7 +28,7 @@ public class TEASERClassifierRealtimeManager {
     this.samplingrate = samplingrate;
 
     int ts_len = this.testSamples[0].getLength();
-    this.sValues = new int[] {2, 5, 10, (int) (ts_len * 0.5), ts_len * 1}; // Snapshotanzahl der S_TEASER Instanzen
+    this.sValues = new int[] {4, 6, 10, (int) (ts_len * 0.5), ts_len * 1}; // Snapshotanzahl der S_TEASER Instanzen
     this.kValues = new int[] {2, 3, 5, 10, 20}; // zusammenfassungsfensterlängen der K_TEASER Instanzen
   }
 
@@ -38,15 +38,15 @@ public class TEASERClassifierRealtimeManager {
     double avgEarliness;
     double avgPredictionTime;
     Double[][] seriesSnapshotTimes; // für jede TS ein Array der Duration an jedem Datenpunkt
-    boolean realtime;
+    double min_prediction_frequency;
 
-    public predictionResults(String predictionTyp, double datasetAccuracy, double avgEarliness, double avgPredictionTime, Double[][] seriesSnapshotTimes, boolean realtime) {
+    public predictionResults(String predictionTyp, double datasetAccuracy, double avgEarliness, double avgPredictionTime, Double[][] seriesSnapshotTimes, double min_prediction_frequency) {
       this.predictionTyp = predictionTyp;
       this.datasetAccuracy = datasetAccuracy;
       this.avgEarliness = avgEarliness;
       this.avgPredictionTime = avgPredictionTime;
       this.seriesSnapshotTimes = seriesSnapshotTimes;
-      this.realtime = realtime;
+      this.min_prediction_frequency = min_prediction_frequency;
     }
 
     // getter
@@ -72,8 +72,8 @@ public class TEASERClassifierRealtimeManager {
       }
       return result;
     }
-    public boolean isAvgRealtime() {
-      return realtime;
+    public double getMinPredictionFrequency() {
+      return min_prediction_frequency;
     }
 
     @Override
@@ -82,7 +82,7 @@ public class TEASERClassifierRealtimeManager {
       + "avgMs: " + String.format("%.02f", this.avgPredictionTime) 
       + "  acc: " + String.format("%.02f", this.datasetAccuracy) 
       + "  earliness: " + String.format("%.02f", this.avgEarliness) 
-      + "  " + (this.realtime ? "avg_REALTIME" : "avg_NOT_REALTIME");
+      + "  minFreq: " + String.format("%.02f", this.min_prediction_frequency);
     }
   }
 
@@ -98,7 +98,7 @@ public class TEASERClassifierRealtimeManager {
     predictionResults[] KTeaserResults = KTeaser_predict(samplingrate);
 
     results = new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults};
-    outputResults();
+    //outputResults();
     return new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults}; // eigentlich liefert jede Methode nur ein Result, zum messen brauche ich aber alle
   }
 
@@ -117,7 +117,7 @@ public class TEASERClassifierRealtimeManager {
               
     // Prediction
     Double[][][] pred = defaultTeaser.predict_and_measure_dataset(testSamples, samplingrate, "default"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
-    return new predictionResults("TEASER_Default", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]) > samplingrate ? true : false);
+    return new predictionResults("TEASER_Default", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]));
   }
 
   public predictionResults skippingTeaser_predict(double samplingrate) { // benutzt auch den vortrainierten default teaser
@@ -127,7 +127,7 @@ public class TEASERClassifierRealtimeManager {
               
     // Prediction
     Double[][][] pred = defaultTeaser.predict_and_measure_dataset(testSamples, samplingrate, "realtime"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
-    return new predictionResults("TEASER_Skipping", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]) > samplingrate ? true : false);
+    return new predictionResults("TEASER_Skip", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]));
   }
 
   public predictionResults[] STeaser_predict(double samplingrate) { // gibt erstmal nur die results der besten instanz zurück
@@ -144,13 +144,10 @@ public class TEASERClassifierRealtimeManager {
       // theorethisch könnte hier abgebrochen werden, wenn die min_prediction_frequency > samplingrate gilt. Weil dann eine RealtimeInstanz gefunden wurde. Ich brauche aber alle Messungen
     }
     // prediction auf traindaten -> beste instanz auswählen (brauche hier acc, earl, duration/min_prediction_freq)
-    int instNr = 0;
-    System.out.println(Arrays.deepToString(scores));
-    for(int i = scores.length-1; i >= 0; i--) { // Instanz mit max acc und min early auswählen, die schneller als die samplingrate ist
-      if(scores[i][2] > samplingrate) { // acc nimmt ab, early nimmt ab, freq nimmt ab, ev wollen wir also nach kleineren S suchen
-        instNr = i;
-      }
-    }
+    int instNr = getBestRealtimeInst(scores);
+    //System.out.println(Arrays.deepToString(scores));
+    
+    System.out.println("S TEASER | Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency (of inst): " + teaserInst[instNr].min_prediction_frequency + "Hz");
     System.out.println("Instanz " + instNr + " wurde ausgewählt. " + scores[instNr][2]);
     // prediction auf testdaten
     //Double[][][] pred = teaserInst[instNr].predict_and_measure_dataset(testSamples, samplingrate, "default"); // prediction der besten standard teaser Instanz auf den trainingsdaten
@@ -159,38 +156,34 @@ public class TEASERClassifierRealtimeManager {
 
     // Ab hier zum messen, sonst die zwei zeilen darüber nutzen
     predictionResults[] result = new predictionResults[sValues.length];
-    for(int i = 0; i < sValues.length; i++) { // prediction auf allen Instanzen
+    for(int i = 0; i < sValues.length; i++) { // prediction mit allen Instanzen
       Double[][][] pred = teaserInst[i].predict_and_measure_dataset(testSamples, samplingrate, "default");
-      result[i] = new predictionResults("TEASER_S_("+sValues[i]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]) > samplingrate ? true : false);
+      result[i] = new predictionResults("TEASER_S_("+sValues[i]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]));
     }
-    return result;
+    //return result; // alle instanzen darstellen
+    Double[][][] pred = teaserInst[instNr].predict_and_measure_dataset(testSamples, samplingrate, "realtime"); // Skipping zusätzlich verwenden
+    return new predictionResults[] {result[instNr], new predictionResults("TEASER_SSkip_("+sValues[instNr]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]))}; // nur die beste instanz
   }
 
   public predictionResults[] KTeaser_predict(double samplingrate) {
-    // vorverarbeitung der train und testdaten
-    // training von 5 instanzen
-    for(int i = 0; i < 5; i++) { // es werden je K werte aus den TS zu einem wert Zusammengefasst (durchschnitt; nur den letzten Wert; ...)
-      // K2, K3, K5, K10, K20
-    }
     // training von 5 instanzen
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
     
     for(int i = 0; i < kValues.length; i++) {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
+      teaserInst[i].K = kValues[i];
+      teaserInst[i].ts_len = trainSamples[0].getLength();
       Classifier.Score score = teaserInst[i].fit_and_measure(downscaleTs(trainSamples, kValues[i]));
 
       scores[i] = new double[] {score.getTrainingAccuracy(), score.getTestEarliness(), teaserInst[i].min_prediction_frequency * kValues[i]}; // der score wird von teaser nur durch eval() gefüllt. ich schreibe die earliness nach dem predict der traindaten hinein
       // theorethisch könnte hier abgebrochen werden, wenn die min_prediction_frequency > samplingrate gilt. Weil dann eine RealtimeInstanz gefunden wurde. Ich brauche aber alle Messungen
     }
     // prediction auf traindaten -> beste instanz auswählen (brauche hier acc, earl, duration/min_prediction_freq)
-    int instNr = 0;
-    System.out.println(Arrays.deepToString(scores));
-    for(int i = scores.length-1; i >= 0; i--) { // Instanz mit max acc und min early auswählen, die schneller als die samplingrate ist
-      if(scores[i][2] > samplingrate) { // acc nimmt leicht zu, earl nimmt zu, freq nimmt ab (mit größerem k)
-        instNr = i;
-      }
-    }
+    int instNr = getBestRealtimeInst(scores);
+    //System.out.println(Arrays.deepToString(scores));
+    
+    System.out.println("K TEASER | Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency (of inst): " + teaserInst[instNr].min_prediction_frequency * kValues[instNr] + "Hz");
     System.out.println("Instanz " + instNr + " wurde ausgewählt. " + scores[instNr][2]);
     // prediction auf testdaten
     //Double[][][] pred = teaserInst[instNr].predict_and_measure_dataset(downscaleTs(testSamples, kValues[instNr]), samplingrate, "default"); // prediction der besten standard teaser Instanz auf den gekürzten trainingsdaten
@@ -199,11 +192,13 @@ public class TEASERClassifierRealtimeManager {
   
     // Ab hier zum messen, sonst die zwei zeilen darüber nutzen
     predictionResults[] result = new predictionResults[kValues.length];
-    for(int i = 0; i < kValues.length; i++) { // prediction auf allen Instanzen
+    for(int i = 0; i < kValues.length; i++) { // prediction mit allen Instanzen
       Double[][][] pred = teaserInst[i].predict_and_measure_dataset(downscaleTs(testSamples, kValues[i]), samplingrate, "default");
-      result[i] = new predictionResults("TEASER_K_("+kValues[i]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], (getMinFrequency(pred[1][0]) * kValues[i]) > samplingrate ? true : false);
+      result[i] = new predictionResults("TEASER_K_("+kValues[i]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], (getMinFrequency(pred[1][0]) * kValues[i]));
     }
-    return result;
+    //return result; // alle instanzen darstellen
+    Double[][][] pred = teaserInst[instNr].predict_and_measure_dataset(downscaleTs(testSamples, kValues[instNr]), samplingrate, "realtime"); // Skipping zusätzlich verwenden
+    return new predictionResults[] {result[instNr], new predictionResults("TEASER_KSkip_("+kValues[instNr]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], (getMinFrequency(pred[1][0]) * kValues[instNr]))}; // nur die beste instanz
   }
 
   // helper methods
@@ -212,7 +207,11 @@ public class TEASERClassifierRealtimeManager {
     for(int i = 0; i < ts.length; i++) { // für jede Zeitreihe im Dataset
       double[] editedData = new double[(int) ts[i].getLength() / k];
       for(int j = 0; j < editedData.length; j++) {
-        editedData[j] = ts[i].getData()[k * j]; // nimmt immer den ersten wert und überspringt dann k-1 werte
+        double sum = 0;
+        for(int x = k * j; x < k * (j+1); x++) {
+          sum += ts[i].getData()[x];
+        }
+        editedData[j] = sum / k; // bildet von je k Werten den Durchschnitt
       }
       result[i] = new TimeSeries(editedData, ts[i].getLabel());
     }
@@ -228,5 +227,31 @@ public class TEASERClassifierRealtimeManager {
     }
     return min;
   }
-  
+
+  private int getBestRealtimeInst(double[][] scores) { // realtime ist ein hartes kriterium, unter allen realtime instanzen wird die mit dem besten harmonic mean von accuracy und earliness gewählt // wenn es keine realtimeinstanz gibt, wählen wir die instanz, mit der höchsten avg frequenz
+    int res = -1;
+    double max_harmonic_mean = 0;
+    for(int i = 0; i < scores.length; i++) { // für jede instanz
+      //System.out.println(scores[i][2]);
+      if(scores[i][2] > samplingrate) { // instanz schafft realtime
+        double harmonic_mean = (2 * (1 - scores[i][1]) * scores[i][0]) / ((1 - scores[i][1]) + scores[i][0]);
+        //System.out.println(i + " " + scores[i][1] + " " + scores[i][0] + " " + harmonic_mean + " realtime");
+        if(max_harmonic_mean < harmonic_mean) {
+          max_harmonic_mean = harmonic_mean;
+          res = i;
+        }
+      }
+    }
+    if(res == -1) { // es gibt keine realtime instanz
+      double max_frequency = 0;
+      for(int i = 0; i < scores.length; i++) { // für jede instanz
+        //System.out.println(i + " " + scores[i][2] + " not realtime");
+        if(max_frequency < scores[i][2]) {
+          max_frequency = scores[i][2];
+          res = i;
+        }
+      }
+    }
+    return res;
+  }
 }

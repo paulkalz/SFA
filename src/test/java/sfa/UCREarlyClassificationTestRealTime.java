@@ -204,17 +204,17 @@ public class UCREarlyClassificationTestRealTime {
             //"Yoga" // datei ist ziemlich groß
   };
 
-  HashMap<String, Double[]> datasetFrequencys = new HashMap<String, Double[]>() {{ // echte Samplingfrequenzen der Datasets in Hz // und min oder max value zum testen
-      put("Chinatown", new Double[] {0.0002777, 50000.0}); // 0.0002777
-      put("DodgerLoopDay", new Double[] {0.00333, 50000.0});
-      put("ECG200", new Double[] {128.0, 50000.0}); 
-      put("ECG5000", new Double[] {250.0, 50000.0});
-      put("EOGHorizontalSignal", new Double[] {1000.0, 50000.0});
-      put("EOGVerticalSignal", new Double[] {1000.0, 50000.0});
-      put("GunPoint", new Double[] {30.0, 50000.0});
-      put("Phoneme", new Double[] {22050.0, 1000.0}); // ?
-      put("PLAID", new Double[] {30000.0, 100.0}); // ?
-      put("SonyAIBORobotSurface1", new Double[] {123.0, 50000.0});
+  HashMap<String, Double[]> datasetFrequencys = new HashMap<String, Double[]>() {{ // echte Samplingfrequenzen der Datasets in Hz // und andere testfrequenzen
+      put("Chinatown", new Double[] {0.0002777, 1000.0, 10000.0, 20000.0, 50000.0}); // 0.0002777
+      put("DodgerLoopDay", new Double[] {0.00333, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("ECG200", new Double[] {128.0, 1000.0, 10000.0, 20000.0, 50000.0}); 
+      put("ECG5000", new Double[] {250.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("EOGHorizontalSignal", new Double[] {1000.0, 1000.0, 20000.0, 10000.0, 50000.0});
+      put("EOGVerticalSignal", new Double[] {1000.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("GunPoint", new Double[] {30.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("Phoneme", new Double[] {22050.0, 1000.0, 10000.0, 20000.0, 50000.0}); // ?
+      put("PLAID", new Double[] {30000.0, 1000.0, 10000.0, 20000.0, 50000.0}); // ?
+      put("SonyAIBORobotSurface1", new Double[] {123.0, 1000.0, 10000.0, 20000.0, 50000.0});
   }};
 
   // helper function
@@ -224,34 +224,6 @@ public class UCREarlyClassificationTestRealTime {
     }catch (IOException e) {
       System.out.println("Exception while writing to outputfile: " + e);
     }
-  }
-
-  // diese methoden könnten in die teaser klasse mit eingebaut werden ist als interface zu komplex // oder eine neue teaser-realtime-verwaltungsklasse machen (wahrscheinlich am besten)
-  public void predict_and_output(TimeSeries[] testSamples, TimeSeries[] trainSamples, String s, TEASERClassifierRealtime t, String resamplingStrategy, double samplingrate) {
-    double min_fitfrequency = t.min_prediction_frequency;
-    
-    System.out.println("Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
-              
-    // standard teaser
-    Double[][][] pred1 = t.predict_and_measure_dataset(testSamples, samplingrate, "default"); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
-    System.out.println("Accuracy of the Datasetprediction( standard teaser ): " + pred1[0][0][0]);
-    // realtime teaser
-    Double[][][] pred = t.predict_and_measure_dataset(testSamples, samplingrate, resamplingStrategy); // pred[0] ist die acc, pred[1] sind die frequenzen aller Samples
-    System.out.println("Accuracy of the Datasetprediction(" + resamplingStrategy + "): " + pred[0][0][0]);
-
-    printtooutputfile(s + " " + samplingrate + " " + min_fitfrequency + " " + trainSamples[0].getLength() + " " + TEASERClassifierRealtime.S + " " + String.format("%.02f", pred1[0][0][0]) + " " + String.format("%.02f", pred1[2][0][0]) + " " + String.format("%.02f", pred[0][0][0]) + " " + String.format("%.02f", pred[2][0][0]) + " " + String.format("%.02f", pred1[5][0][0]) + " " + String.format("%.02f", pred[5][0][0]) + '\n'); // neue dataset prediction (acc, early, acc, early)
-    // log to Outputfile (standard teaser)
-    printtooutputfile(Arrays.toString(pred1[1][0]) + "\n");
-    for(int j = 0; j < testSamples.length; j++) {
-      printtooutputfile("+" + Arrays.toString(pred1[4][j]) + "\n");
-    }
-    
-    // log to Outputfile (realtime teaser)
-    printtooutputfile(Arrays.toString(pred[1][0]) + "\n");
-    for(int j = 0; j < testSamples.length; j++) {
-      printtooutputfile("-" + Arrays.toString(pred[4][j]) + "\n");
-    }
-    //printtooutputfile("\n");          
   }
 
   @Test
@@ -295,19 +267,21 @@ public class UCREarlyClassificationTestRealTime {
               //System.out.println(scoreT);
 
               // Prediction
+              printtooutputfile("DATASET: " + s + "\n");
               // System.out.println("Start the Prediction"); 
               for(int j = 0; j < 1; j++) { // 1 Predictions pro Dataset
                 for(int i = 0; i<5; i++) { // immer 5 predictions machen (mit unterschiedlichen Frequenzen)
-                  double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/5) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
+                  //double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/5) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
+                  double test_frequency = datasetFrequencys.getOrDefault(s, null)[i];
                   //predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
                   
                   TEASERClassifierRealtimeManager manager = new TEASERClassifierRealtimeManager(testSamples, trainSamples, test_frequency);
                   predictionResults[][] result = manager.manageRealtime(); // do training, prediction and output
-                  printtooutputfile("NewDataset:_" + s +" "+ test_frequency + " " + trainSamples[0].getLength() + "\n");
+                  printtooutputfile("NewDatasetFrequency:_" + s +" "+ test_frequency + " " + trainSamples[0].getLength() + "\n");
                   for(predictionResults[] strategy : result) {
                     //printtooutputfile(strategy[0].getTyp() + "\n"); // default, skipping, s, k
                      for(predictionResults variant : strategy) {
-                       printtooutputfile(variant.getTyp() + " " + String.valueOf(variant.getAccuracy()) + " " + String.valueOf(variant.getEarlyness()) + " " + String.valueOf(variant.getPredictionTime()) + " " + String.valueOf(variant.isAvgRealtime()) + "\n");
+                       printtooutputfile(variant.getTyp() + " " + String.valueOf(variant.getAccuracy()) + " " + String.valueOf(variant.getEarlyness()) + " " + String.valueOf(variant.getPredictionTime()) + " " + String.valueOf(variant.getMinPredictionFrequency()) + "\n");
                         printtooutputfile(variant.getSnapshotTimesToString());
                       }
                     }

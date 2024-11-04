@@ -23,6 +23,8 @@ public class TEASERClassifierRealtimeInst extends Classifier {
   private Double[] avgMsPerSnapshotFit; // avg Ms fuer die Prediction jedes Snapshots, gemessen beim training, zum einschaetzen der Predictiontime
   private boolean disable_earlyness = false; // wenn true, wird jeder Snapshot klassifiziert
   private double originalDatasetFrequency = 0;
+  public int K = 1; // for K-TEASER
+  public int ts_len = 0; // for calculation of earliness
 
   /**
    * The parameters for the one-class SVM
@@ -159,9 +161,12 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     
     // test prediction auf den trainsamples (um die langsamste frequenz zu finden)
     double max_train_pred_duration = 0;
+    double avg_earliness = 0;
     for(TimeSeries trainSeries : trainingSamples) {
       long startTimetrainpred = System.nanoTime();
-      Double[] snapTimes = predict_and_measure(new TimeSeries[] {trainSeries}, 0.0, "")[5]; // brauche spter um zu messen, wie lange laengere Snapshots brauchen, ev. predict_and_measure verwenden
+      Double[][] pred = predict_and_measure(new TimeSeries[] {trainSeries}, 0.0, ""); // brauche spter um zu messen, wie lange laengere Snapshots brauchen, ev. predict_and_measure verwenden
+      avg_earliness += pred[1][0];
+      Double[] snapTimes = pred[5];
       long estimatedTimetrainpred = System.nanoTime() - startTimetrainpred;
       double estimatedMilliSecondstrainpred = (double) estimatedTimetrainpred / 1000000;
       max_train_pred_duration = max_train_pred_duration > estimatedMilliSecondstrainpred ? max_train_pred_duration : (double) estimatedMilliSecondstrainpred;
@@ -170,17 +175,18 @@ public class TEASERClassifierRealtimeInst extends Classifier {
         avgMsPerSnapshotFit[i] += snapTimes[i];
       }
     }
+    avg_earliness = avg_earliness / trainingSamples.length;
     double min_train_predict_frequency = 1 / ((max_train_pred_duration / trainingSamples[0].getLength()) / 1000);
     min_prediction_frequency = Math.min(min_train_predict_frequency, fit_predict_frequency); // kleinere Frequenz finden
 
     for(int i = 0; i < S+1; i++) {
       avgMsPerSnapshotFit[i] = avgMsPerSnapshotFit[i] / trainingSamples.length;
     }
-    System.out.println(Arrays.toString(avgMsPerSnapshotFit));
+    //System.out.println(Arrays.toString(avgMsPerSnapshotFit));
 
     disable_earlyness = false;
     // return score
-    model.score.avgOffset = predict(trainingSamples, true).offset / trainingSamples.length; // trainings earliness in den score schreiben
+    model.score.avgOffset = avg_earliness; // trainings earliness in den score schreiben
     return model.score;
   }
 
@@ -221,8 +227,8 @@ public class TEASERClassifierRealtimeInst extends Classifier {
         long startTimeFit = System.nanoTime();
         OffsetPrediction off = predict(samples, false); //  prediction auf den trainingsdaten, die TS werden nicht gekürzt
         long estimatedTimeFit = System.nanoTime() - startTimeFit;
-        System.out.print("Prediction Duration (for entire trainDataset): ");
-        System.out.println((double) estimatedTimeFit / 1000000); //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
+        //System.out.print("Prediction Duration (for entire trainDataset): ");
+        //System.out.println((double) estimatedTimeFit / 1000000); //TimeUnit.NANOSECONDS.toMillis(estimatedTime); // convert to milliseconds
         max_prediction_time = max_prediction_time > estimatedTimeFit ? max_prediction_time : (double) estimatedTimeFit;
 
 
@@ -230,7 +236,7 @@ public class TEASERClassifierRealtimeInst extends Classifier {
         double earliness = 1.0 - off.offset / off.N; 
 
         double harmonic_mean = 2 * correct * earliness / (correct + earliness);
-        System.out.println("Prediction:\t" + model.threshold + "\t" + off + "\t" + harmonic_mean);
+        //System.out.println("Prediction:\t" + model.threshold + "\t" + off + "\t" + harmonic_mean);
 
         if (bestF1 < harmonic_mean) {
           bestF1 = harmonic_mean;
@@ -350,15 +356,15 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     double datasetAccuracy = ((double) correct_prediction / (double) timeSeriesDataset.length);
     average_earliness = average_earliness / (double) timeSeriesDataset.length;
     average_prediction_time = average_prediction_time / (double) timeSeriesDataset.length;
-    System.out.println("Average Earliness: " + average_earliness);
+    //System.out.println("Average Earliness: " + average_earliness);
     double average_frequency = 0;
     for(double freq : seriesFrequencys) {
       average_frequency += freq;
     }
     average_frequency = average_frequency / (double) seriesFrequencys.length;
-    System.out.println("Average Frequency: " + average_frequency);
+    //System.out.println("Average Frequency: " + average_frequency);
 
-    System.out.println("Average Prediction Time: " + average_prediction_time);
+    //System.out.println("Average Prediction Time: " + average_prediction_time);
     average_prediction_time = 0;
     for(int i = 0; i < timeSeriesDataset.length; i++) {
       int j = (int) S;
@@ -368,7 +374,7 @@ public class TEASERClassifierRealtimeInst extends Classifier {
       average_prediction_time += seriesSnapshotTimes[i][j];
     }
     average_prediction_time = average_prediction_time / (double) timeSeriesDataset.length;
-    System.out.println("Average Prediction Time: " + average_prediction_time);
+    //System.out.println("Average Prediction Time: " + average_prediction_time);
 
     return new Double[][][] {new Double[][] {new Double[] {datasetAccuracy}}, new Double[][] {seriesFrequencys}, new Double[][] {new Double[] {average_earliness}}, new Double[][] {new Double[] {average_frequency}}, seriesSnapshotTimes, new Double[][] {new Double[] {average_prediction_time}}};
     // accuracy of the dataset, array with the reached prediction frequency for each timeseries in the dataset, average earliness, average prediction frequency, elapsed prediction time at every Snapshotprediction for every TS, average prediction time of the dataset
@@ -430,11 +436,11 @@ public class TEASERClassifierRealtimeInst extends Classifier {
       if(currentFrequency > datasetFrequency) { // es ist nach dem skippen zu Snapshot i schnell genug
         double temp = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000);
         //System.out.println(elapsedPredictionTimeMs + " " + model.offsets[lastSnapshot]);
-        System.out.println("ZU LANGSAM -> Skippen von " + lastSnapshot + " zu " + i + " ( von " + temp + " zu " + currentFrequency + " ) " + datasetFrequency); // current = estimation nach dem skip, temp = aktuell
+        //System.out.println("ZU LANGSAM -> Skippen von " + lastSnapshot + " zu " + i + " ( von " + temp + " zu " + currentFrequency + " ) " + datasetFrequency); // current = estimation nach dem skip, temp = aktuell
         return i; // returns the next Snapshot that should be evaluated (return - currentSnapshot = number of Snapshots that should be skipped to predict with datasetFrequency)
       }
     }
-    System.out.println("ZU LANGSAM - REAL-TIME NICHT MOEGLICH " + lastSnapshot + " " + currentFrequency + " " + datasetFrequency);
+    //System.out.println("ZU LANGSAM - REAL-TIME NICHT MOEGLICH " + lastSnapshot + " " + currentFrequency + " " + datasetFrequency);
     return (int) S; // es ist nicht mehr moeglich schnell genug zu sein // ich skippe zum letzten snapshot
   }
 
@@ -468,7 +474,7 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     //System.out.println(Arrays.toString(extractUntilOffset(testSamples, model.offsets[2], true)[0].getData()));
     //printJVMMemory();
     long startTimePred = System.nanoTime();
-    timesPerSnapshot[0] = (double) (System.nanoTime() - startTimePred) / 1000000;
+    //timesPerSnapshot[0] = (double) (System.nanoTime() - startTimePred) / 1000000;
 
     predict:
     for (int s = 0; s < model.slaveModels.length; s++) { // S + 1 Wealsel (slaves) (im normalfall 21) mit jedem durchlauf wurde auf 5% mehr daten trainiert
@@ -515,9 +521,11 @@ public class TEASERClassifierRealtimeInst extends Classifier {
                 //if(testing) {System.out.println("PREDICTION");}
                 //if(testing) {System.out.println(model.offsets[s]);}
 
-                double earliness = Math.min(1.0, ((double) model.offsets[s] / testSamples[ind].getLength()));
+                //double earliness = Math.min(1.0, ((double) model.offsets[s] / testSamples[ind].getLength()));
+                double earliness = Math.min(1.0, ((double) model.offsets[s] * K / Math.max(testSamples[ind].getLength(), ts_len))); // korregiert rundungsfehler bei K-Teaser
                 avgOffset += earliness; 
-
+                //System.out.println(K + " " + S+" "+ earliness + " " + model.offsets[s] + " " + testSamples[ind].getLength() + " " + ts_len);
+                
                 offsets[ind] = model.offsets[s];
 
                 perClassEarliness.addTo(testSamples[ind].getLabel(), earliness); // earliness der einzelnen Klassen speichern
@@ -534,14 +542,14 @@ public class TEASERClassifierRealtimeInst extends Classifier {
           if (count == testSamples.length && !disable_earlyness) { // stoppen, wenn alle TS eine prediction haben // mit disable_earliness werden alle Snapshots predicted
             //if(testing) {System.out.println("PREDICTION");}
             //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // Dauer bis zur entgültigen Klassifikation
-            timesPerSnapshot[s] = (double) (System.nanoTime() - startTimePred) / 1000000;
+            timesPerSnapshot[s] = (double) (System.nanoTime() - startTimePred) / 1000000; // jetzt wurde klassifiziert
             //if(testing) {System.out.println(Arrays.toString(timesPerSnapshot));}
             break predict;
           }
         }
       }
       //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // nach jeder Snapshotklassifikation ausgeben, wie lange wir schon klasifizieren
-      timesPerSnapshot[s] = (double) (System.nanoTime() - startTimePred) / 1000000;
+      timesPerSnapshot[s] = (double) (System.nanoTime() - startTimePred) / 1000000; // Es wurde noch nicht Klassifiziert
     }
 
     // per Class counts

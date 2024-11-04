@@ -472,8 +472,10 @@ public class TEASERClassifierRealtime extends Classifier {
         
         // extract samples of length offset
         TimeSeries[] data = extractUntilOffset(testSamples, model.offsets[s], testing); // die ersten beiden werte sind -1 // ich habe immer nur 1 TS gleichzeitig
-        //if(testing) {System.out.println(data[0].getLength());}
-
+        //if(true) {System.out.println(data[0].getLength());}
+        //if(true) {System.out.println(data[0].getData().length);}
+        //if(true) {System.out.println(Arrays.toString(data[0].getData()));}
+        
         // Slave Classification
         this.slaveClassifier.setModel(model.slaveModels[s]); // TODO ugly
         Predictions result = this.slaveClassifier.predictProbabilities(data); //  wahrscheinlichkeiten pro Klasse

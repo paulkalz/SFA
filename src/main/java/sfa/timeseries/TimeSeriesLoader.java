@@ -68,7 +68,7 @@ public class TimeSeriesLoader {
           }
         }
         if (j > 0) {
-          TimeSeries ts = new TimeSeries(Arrays.copyOfRange(data, 0, columns.length), label); // Changed j to columns.length, so NaN puffer Values in variable-length Datasets are no longer ignored
+          TimeSeries ts = new TimeSeries(Arrays.copyOfRange(data, 0, columns.length-1), label); // Changed j to columns.length, so NaN puffer Values in variable-length Datasets are no longer ignored <- does not work ev. columns.length-1 (data without label)
           ts.norm();
           samples.add(ts);
         }

@@ -37,7 +37,7 @@ def trim_zeros(arr):
     return arr
 
 def fillArray(arr): # schneidet nullen am ende ab und ersetzt mittlere nullen durch den letzten messwert
-    times = list(map(float, arr[2:-1].split(", "))) #trim_zeros(list(map(float, arr[2:-1].split(", "))))
+    times = list(map(float, arr[1:-1].split(","))) #trim_zeros(list(map(float, arr[2:-1].split(", "))))
     letzerwert = None
     for j in range(len(times)): # die nullen werden durch den letzen gemessenen wert ersetzt
         if times[j] != 0:
@@ -58,6 +58,13 @@ def trim_duplicates(arr):
     if count > 1:
         return arr[:-count + 1]  # doppelte werte abschneiden
     return arr # keine doppelten werte am ende
+
+def getPredictionTime(ts):
+    arr = list(map(float, ts[1:-1].split(","))) #trim_zeros(list(map(float, arr[2:-1].split(", "))))
+    for zahl in reversed(arr):
+        if zahl != 0:
+            return zahl
+    return arr[0]
 
 def skipping_plot():
     measurements = []
@@ -106,11 +113,12 @@ def snapshotTStoPointTS(arr, S, ts_len): # duch das neue arr gehen, nach den pun
     for i in range(1, S+1):
         offsets.append(int(step * i))
     #print(str(S) + " " + ts_len +" "+ str(len(arr)) + " " + str(step))
-    #print(offsets)
+    #offsetstr = " ".join(str(x) for x in offsets)
+    #print(offsetstr + " " + str(step))
     result = []
-    result.append(0)
+    result.append(0) # die Zeit eines Snapshots wird nach seinem letzten Punkt angerechnet
     temp = 0
-    for i in range(1, int(float(ts_len))):
+    for i in range(1, int(float(ts_len))+1): # +1 weil die dauer des letzten snapshots erst nach dem letzten Datenpunkt eingetragen wird
         if i in offsets:
             result.append(arr[temp])
             temp += 1
@@ -120,8 +128,88 @@ def snapshotTStoPointTS(arr, S, ts_len): # duch das neue arr gehen, nach den pun
 
 def processTS(arr, ts_len): # input arr ist der string eines arrays (eine zeile)
     # füllt lücken in der messung, verteilt die snapshotmessungen auf die datenpunkte, schneidet messungen nach dem klassifikationszeitpunkt ab
+    #print("new")
+    #print(arr)
     res = fillArray(arr)
+    #print(res)
+    #print(snapshotTStoPointTS(res, len(res), ts_len))
+    #print(len(snapshotTStoPointTS(res, len(res), ts_len)))
+    #print(trim_duplicates(snapshotTStoPointTS(res, len(res), ts_len)))
+    #print(len(trim_duplicates(snapshotTStoPointTS(res, len(res), ts_len))))
     return trim_duplicates(snapshotTStoPointTS(res, len(res), ts_len)) # S = (arr) da wir eine messung pro snapshot haben
+
+def add_lists(list1, list2):
+    max_length = max(len(list1), len(list2))
+    result = []
+    for i in range(max_length):
+        value1 = list1[i] if i < len(list1) else 0
+        value2 = list2[i] if i < len(list2) else 0
+        result.append(value1 + value2)
+    return result
+
+def countInd(liste, counter_list):
+    for i in range(len(liste)):
+        counter_list[i] += 1
+    return counter_list
+
+def plotAverageMeasurement(startline, ts_len): # plots a ts with the averaged values for every processed ts in a measurement # sollte ungekürzte ts verwenden
+    ts_len = int(ts_len)
+    print("seaching measurement values (and averaging them) beginning from line: " + str(startline))
+    ts = [0] * (ts_len+1)
+    lines_counter = [0] * (ts_len+1)
+    #print(str(ts_len) + " " + str(len(lines_counter)) + " " + str(len(ts)))
+    for i in range(startline+1, len(zeilen)): # alle messwerte dieser messung werden gesammelt
+        if(zeilen[i][0] == "T"):
+            break;
+        if(zeilen[i][0] == "["):
+            temp = processTS(zeilen[i], ts_len)
+            lines_counter = countInd(temp, lines_counter)
+            ts = add_lists(ts, temp)
+    # hier muss die summe geteilt werden
+    #print(str(ts_len) + " " + str(len(lines_counter)) + " " + str(len(ts)))
+    #print(ts)
+    for x in range(len(ts)):
+        if(lines_counter[x] > 1):
+            ts[x] = ts[x] / lines_counter[x]
+    # dann geplotted
+    plt.plot(trim_duplicates(ts), linewidth=1, color='red', linestyle='--')
+
+def plotAverageDefault(startline, ts_len_in): # bei den average graphen gibt es spikes, wenn viele ts fertig werden (nicht gut, graph muss monoton sein)
+    ts_len = int(ts_len_in)
+    print("seaching default teaser values beginning from line: " + str(startline))
+    ts = [0] * ts_len
+    lines_counter = [0] * (ts_len+1)
+    for i in range(startline, len(zeilen)):
+        if(zeilen[i].split(" ")[0] == "TEASER_Default"): # default teaser wurde gefunden
+            for j in range(i+1, len(zeilen)): # alle werte plotten
+                if(zeilen[j][0] == "T"):
+                    break;
+                if(zeilen[j][0] == "["):
+                    temp = processTS(zeilen[j], ts_len)
+                    lines_counter = countInd(temp, lines_counter)
+                    ts = add_lists(ts, temp)
+            # hier muss die summe geteilt werden
+            #print(str(ts_len) + " " + str(len(lines_counter)) + " " + str(len(ts)))
+            for x in range(len(ts)):
+                if(lines_counter[x] > 0):
+                    ts[x] = ts[x] / lines_counter[x]
+            # dann geplotted
+            plt.plot(trim_duplicates(ts), linewidth=1, color='blue', linestyle='--')
+            break
+
+def plotWorstMeasurement(startline, ts_len, color, label): # ist mir erstmal wichtiger als der average
+    print("seaching worst measurement values beginning from line: " + str(startline))
+    max = 0;
+    worstline = 0;
+    for i in range(startline+1, len(zeilen)):
+        if(zeilen[i][0] == "T"):
+            break;
+        if(zeilen[i][0] == "["):
+            temp = getPredictionTime(zeilen[i])
+            if(temp > max):
+                max = temp
+                worstline = i
+    plt.plot(processTS(zeilen[worstline], ts_len), linewidth=1, color=color, label=label)
 
 def plot_realtimeline(samplingrate, S, ts_len): # alle inputs als string // S sollte auch Datenpunkte sein können / für STeaser muss die x achse über punkte laufen um s und default zu vergleichen
     richtlinie = []
@@ -188,22 +276,71 @@ def four_strategies_plot(): # x-Achse sind datapoints, y-Achse sind ms
             counter += 1
             plt.subplot(2,6, counter)
             headerzeile = zeilen[i].split(" ")
-            plt.title(headerzeile[0] + "\n" + headerzeile[1][:4] + " acc " + headerzeile[2][:4] + " early \n" + headerzeile[3][:4] + "avg. ms " + headerzeile[4])
+            plt.title(headerzeile[0] + "\n" + headerzeile[1][:4] + " acc " + headerzeile[2][:4] + " early \n" + headerzeile[3][:4] + "avg. ms " + headerzeile[4].split(".")[0] + "Hz")
             plt.subplots_adjust(hspace=0.5)
             plt.ylabel('Predictiontime in ms')
             plt.grid(True)
             plt.xlabel('Datapoints')
             ts_len = current_dataset_headline.split(" ")[2]
-            plot_default_points(current_dataset_headline_index, 21, ts_len)
+            #plot_default_points(current_dataset_headline_index, 21, ts_len)
+            plotAverageDefault(current_dataset_headline_index, ts_len)
             if not zeilen[i-1] == current_dataset_headline: # der erste subplot sind nur die default werte
-                plot_measurement_points(i, ts_len)
+                #plot_measurement_points(i, ts_len)
+                plotAverageMeasurement(i, ts_len)
             plot_realtimeline(current_dataset_headline.split(" ")[1], ts_len, ts_len) # wenn S == len(TS), dann ist die x-Achse datapoints
-        if counter == 12:
+        if counter == 12: # neue Grafik anfangen
             counter = 0
             plt.show()
             
     plt.show()
 
+dataset_counter = 0; # startzeile des aktuellen datasets
+current_dataset_headline = ""
+current_dataset_headline_index = 0;
+def plot_dataset(): # plot eines Datasets, ein Diagramm pro frequenz mit allen Methoden (worst ts)
+    counter = 0; # subplot index
+    methods_counter = 0;
+    colors = ["red", "yellow", "green", "black", "magenta"]
+    for i in range(len(zeilen)):
+        if(zeilen[i][0] == "D"):
+            print("new Dataset found: " + zeilen[i])
+            counter = 0
+            methods_counter = 0
+            if(not i == 0):
+                plt.legend(loc="upper left")
+                plt.show()
+        if(zeilen[i][0] == "N"): # neues Dataset beginnt (neue frequenz)
+            print("new Frequency found: " + zeilen[i])
+            plt.suptitle(zeilen[i].split("_")[1].split(" ")[0])
+            current_dataset_headline = zeilen[i]
+            current_dataset_headline_index = i
+            counter += 1
+            methods_counter = 0
+            plt.subplot(1, 5, counter)
+            headerzeile = zeilen[i].split(" ")
+            plt.title(headerzeile[1] + "Hz")
+            plt.subplots_adjust(hspace=0.5)
+            plt.ylabel('Predictiontime in ms')
+            plt.grid(True)
+            plt.xlabel('Datapoints')
+            ts_len = current_dataset_headline.split(" ")[2]
+            plot_realtimeline(current_dataset_headline.split(" ")[1], ts_len, ts_len) # wenn S == len(TS), dann ist die x-Achse datapoints
+            plotWorstMeasurement(current_dataset_headline_index+1, ts_len, "blue", "TEASER_Default") # worst ts from default teaser
+        if (zeilen[i][0] == "T"): # neue messung beginnt (neue teaser methode)
+            if not zeilen[i-1] == current_dataset_headline: # der erste subplot sind nur die default werte
+                plotWorstMeasurement(i, ts_len, colors[methods_counter], zeilen[i].split(" ")[0])
+                methods_counter += 1
+        if counter == 6: # anzahl der frequenzen pro dataset // neue Grafik anfangen
+            counter = 0
+            plt.legend(loc="upper left")
+            plt.show()
+    plt.legend(loc="upper left")
+    plt.show()
+
+plot_dataset()
+
+def getDatasetScores(): # acc, early, min_frequenz pro Methode pro testfrequenz // für gesamtaussagen
+    print() 
 
 
-four_strategies_plot()
+#four_strategies_plot() # def_skip_s_sskip_k_kskip_pointsForMeasurement
