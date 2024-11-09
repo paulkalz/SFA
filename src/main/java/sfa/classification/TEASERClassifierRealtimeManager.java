@@ -28,7 +28,7 @@ public class TEASERClassifierRealtimeManager {
     this.samplingrate = samplingrate;
 
     int ts_len = this.testSamples[0].getLength();
-    this.sValues = new int[] {4, 6, 10, (int) (ts_len * 0.5), ts_len * 1}; // Snapshotanzahl der S_TEASER Instanzen
+    this.sValues = new int[] {4, 6, 10, Math.min((int) (ts_len * 0.5), 50), Math.min(ts_len * 1, 100)}; // Snapshotanzahl der S_TEASER Instanzen
     this.kValues = new int[] {2, 3, 5, 10, 20}; // zusammenfassungsfensterlängen der K_TEASER Instanzen
   }
 

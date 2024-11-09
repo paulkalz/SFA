@@ -21,7 +21,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -32,8 +34,8 @@ public class UCREarlyClassificationTestRealTime {
   // The datasets to use
   public static String[] datasets = new String[]{
           "Chinatown", // acc = 93%
-          //"ECG200",
-          //"GunPoint",
+          "ECG200",
+          "GunPoint",
           //"PLAID",
           //"SonyAIBORobotSurface1",
           //"DodgerLoopDay", // acc = 54%, weil heaperror
@@ -99,7 +101,7 @@ public class UCREarlyClassificationTestRealTime {
           "DistalPhalanxOutlineAgeGroup",
           "DistalPhalanxOutlineCorrect",
           "DistalPhalanxTW",
-            //"DodgerLoopDay", // Heap Error // 1300 Hz
+            "DodgerLoopDay", // Heap Error // 1300 Hz
           "DodgerLoopGame",
           "DodgerLoopWeekend",
             //"Earthquakes", // datei ist ziemlich groß
@@ -107,8 +109,8 @@ public class UCREarlyClassificationTestRealTime {
             //"ECG5000", // datei ist ziemlich groß
           "ECGFiveDays",
             //"ElectricDevices", // datei ist ziemlich groß
-            //"EOGHorizontalSignal", // datei ist ziemlich groß
-            //"EOGVerticalSignal", // datei ist ziemlich groß
+            "EOGHorizontalSignal", // datei ist ziemlich groß
+            "EOGVerticalSignal", // datei ist ziemlich groß
             //"EthanolLevel", // datei ist ziemlich groß
             //"FaceAll", // datei ist ziemlich groß
           "FaceFour",
@@ -237,7 +239,12 @@ public class UCREarlyClassificationTestRealTime {
 
       TimeSeries.APPLY_Z_NORM = false;
 
-      for (String s : datasets) { 
+      int n = datasets_ucr.length; // Anzahl der parallelen Streams
+      ForkJoinPool customThreadPool = new ForkJoinPool(60); // gruenau6 hat 120 threads, ich darf maximal 50% davon verwenden
+      customThreadPool.submit(() -> IntStream.range(0, n).parallel().forEach(stream -> {
+      //IntStream.range(0, n).parallel().forEach(stream -> { // stream ist nur eine laufvariable
+        String s = datasets_ucr[stream];
+        
         System.out.println("Aktuelles Dataset: " + s);
         File d = new File(dir.getAbsolutePath() + "/" + s); 
         if (d.exists() && d.isDirectory()) { 
@@ -255,38 +262,43 @@ public class UCREarlyClassificationTestRealTime {
               TimeSeries[] trainSamples = TimeSeriesLoader.loadDataset(train);
 
               // The TEASER-classifier
-              TEASERClassifierRealtime t = new TEASERClassifierRealtime();
+              //TEASERClassifierRealtime t = new TEASERClassifierRealtime();
 
               //TEASERClassifierRealtime.S = max(20, testSamples[0].getLength() / 35); // ich will max 35 neue Datenpunkte pro snapshot und nicht weniger als 20 Snapshots
-              TEASERClassifierRealtime.S = 20;
+              //TEASERClassifierRealtime.S = 20;
               //System.out.println("S: " + TEASERClassifierRealtime.S);
               //TEASERClassifierRealtime.PRINT_EARLINESS = true;
 
               // Modell trainieren
               //Classifier.Score scoreT = t.fit_and_measure(trainSamples); // fit_and_measure trainiert Teaser und misst die minimale prediction frequenz auf den trainingdaten (t.min_prediction_frequency)
               //System.out.println(scoreT);
-
+              try{
               // Prediction
-              printtooutputfile("DATASET: " + s + "\n");
+              String loggingContent = "";
+              loggingContent += "DATASET: " + s + "\n";
               // System.out.println("Start the Prediction"); 
               for(int j = 0; j < 1; j++) { // 1 Predictions pro Dataset
                 for(int i = 0; i<5; i++) { // immer 5 predictions machen (mit unterschiedlichen Frequenzen)
                   //double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/5) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
-                  double test_frequency = datasetFrequencys.getOrDefault(s, null)[i];
+                  double test_frequency = datasetFrequencys.getOrDefault(s, new Double[] {100.0, 1000.0, 10000.0, 20000.0, 50000.0})[i];
                   //predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
                   
                   TEASERClassifierRealtimeManager manager = new TEASERClassifierRealtimeManager(testSamples, trainSamples, test_frequency);
                   predictionResults[][] result = manager.manageRealtime(); // do training, prediction and output
-                  printtooutputfile("NewDatasetFrequency:_" + s +" "+ test_frequency + " " + trainSamples[0].getLength() + "\n");
+                  loggingContent += "NewDatasetFrequency:_" + s +" "+ test_frequency + " " + trainSamples[0].getLength() + "\n";
                   for(predictionResults[] strategy : result) {
                     //printtooutputfile(strategy[0].getTyp() + "\n"); // default, skipping, s, k
                      for(predictionResults variant : strategy) {
-                       printtooutputfile(variant.getTyp() + " " + String.valueOf(variant.getAccuracy()) + " " + String.valueOf(variant.getEarlyness()) + " " + String.valueOf(variant.getPredictionTime()) + " " + String.valueOf(variant.getMinPredictionFrequency()) + "\n");
-                        printtooutputfile(variant.getSnapshotTimesToString());
+                       loggingContent += variant.getTyp() + " " + String.valueOf(variant.getAccuracy()) + " " + String.valueOf(variant.getEarlyness()) + " " + String.valueOf(variant.getPredictionTime()) + " " + String.valueOf(variant.getMinPredictionFrequency()) + "\n";
+                        loggingContent += variant.getSnapshotTimesToString();
                       }
                     }
                 }
               }
+              printtooutputfile(loggingContent);
+            } catch(OutOfMemoryError e) {
+              System.out.println("HeapError in " + s + " " + e);
+            }
             }
           }
         } else {
@@ -294,7 +306,9 @@ public class UCREarlyClassificationTestRealTime {
           System.out.println("Dataset could not be found: " + d.getAbsolutePath() + ". " +
                   "Please download datasets from [http://www.cs.ucr.edu/~eamonn/time_series_data/].");
         }
-      }
+
+
+      })).join(); // ab hier nicht mehr parallel
       System.out.println("Done");
     } finally {
       TimeSeries.APPLY_Z_NORM = true; // FIXME static variable breaks some test cases!
