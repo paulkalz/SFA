@@ -425,6 +425,7 @@ public class TEASERClassifierRealtimeInst extends Classifier {
   private int nextSnapshot(double datasetFrequency, int lastSnapshot, double elapsedPredictionTimeMs) { // currentSnapshot ist der letzte bearbeitete Snapshot
     if(model.offsets[lastSnapshot] == -1) {return lastSnapshot + 1;} // es wurde noch keine Prediction gemacht
     double currentFrequency = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000); // aktuelle prediction frequenz bestimmen (in Hz) (am letzten snapshot)
+    currentFrequency = currentFrequency * K; // um die komprimierten TS von K-Teaser in der erreichen frequenz auszugleichen (bei nicht-K-Teaser ist K=1)
     if(currentFrequency > datasetFrequency) { // wenn schnell genug, dann weitermachen // (hier koennte auch getestet werden, ob wir nach dem naechsten SN noch schnell genug sind)
       return lastSnapshot + 1;
     }
@@ -432,7 +433,8 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     for(int i = lastSnapshot+1; i < S+1; i++) { // fuer alle noch kommenden Snapshots
       double estimated_post_skip_Snapshot_time = avgMsPerSnapshotFit[i] - avgMsPerSnapshotFit[i-1]; // zeit, die beim fitten durchschnittlich fuer Snapshot i gebraucht wurde
       currentFrequency = 1 / (((elapsedPredictionTimeMs + estimated_post_skip_Snapshot_time) / model.offsets[i]) / 1000);
-      
+      currentFrequency = currentFrequency * K; // um die komprimierten TS von K-Teaser in der erreichen frequenz auszugleichen (bei nicht-K-Teaser ist K=1)
+
       if(currentFrequency > datasetFrequency) { // es ist nach dem skippen zu Snapshot i schnell genug
         double temp = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000);
         //System.out.println(elapsedPredictionTimeMs + " " + model.offsets[lastSnapshot]);
