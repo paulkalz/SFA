@@ -1,6 +1,10 @@
 package sfa.classification;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.IntStream;
 
 import sfa.timeseries.TimeSeries;
 
@@ -89,17 +93,50 @@ public class TEASERClassifierRealtimeManager {
   public predictionResults[][] manageRealtime() { // ev. noch die anzätze kombinieren
     // Train the default Teaser
     defaultTeaser = new TEASERClassifierRealtime();
-    Classifier.Score scoreDefaultTeaser = defaultTeaser.fit_and_measure(this.trainSamples);
-    System.out.println(scoreDefaultTeaser); // debugging
+    //Classifier.Score scoreDefaultTeaser = defaultTeaser.fit_and_measure(this.trainSamples);
+    //System.out.println(scoreDefaultTeaser); // debugging
+    
+    // nicht parallele ausführung
+    //predictionResults defaultTeaserResults = defaultTeaser_predict(samplingrate);
+    //predictionResults skippingTeaserResults = skippingTeaser_predict(samplingrate);
+    //predictionResults[] STeaserResults = STeaser_predict(samplingrate);
+    //predictionResults[] KTeaserResults = KTeaser_predict(samplingrate);
 
-    predictionResults defaultTeaserResults = defaultTeaser_predict(samplingrate);
-    predictionResults skippingTeaserResults = skippingTeaser_predict(samplingrate);
-    predictionResults[] STeaserResults = STeaser_predict(samplingrate);
-    predictionResults[] KTeaserResults = KTeaser_predict(samplingrate);
+    // Erstelle einen ForkJoinPool
+    ForkJoinPool forkJoinPool = new ForkJoinPool();
 
-    results = new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults};
+    // Variablen für die Ergebnisse
+    predictionResults[][] temp_results = new predictionResults[4][];
+
+    // Führe die Aufgaben parallel aus
+    forkJoinPool.submit(() -> {
+        // Train the default Teaser
+        Classifier.Score scoreDefaultTeaser = defaultTeaser.fit_and_measure(this.trainSamples);
+        System.out.println(scoreDefaultTeaser); // debugging
+        temp_results[0] = new predictionResults[] {defaultTeaser_predict(samplingrate)};
+        temp_results[1] = new predictionResults[] {skippingTeaser_predict(samplingrate)};
+    });
+
+    forkJoinPool.submit(() -> {
+        temp_results[2] = STeaser_predict(samplingrate);
+    });
+
+    forkJoinPool.submit(() -> {
+        temp_results[3] = KTeaser_predict(samplingrate);
+    });
+
+    // Schließe den Pool und warte auf Abschluss
+    forkJoinPool.shutdown();
+
+    // Optional: Warte darauf, dass alle Aufgaben abgeschlossen sind
+    while (!forkJoinPool.isTerminated()) {
+        // Warten bis alle Aufgaben abgeschlossen sind
+    }
+    System.out.println("Frequency done: " + samplingrate);
+
+    results = temp_results;//new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults};
     //outputResults();
-    return new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults}; // eigentlich liefert jede Methode nur ein Result, zum messen brauche ich aber alle
+    return temp_results;//new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults}; // eigentlich liefert jede Methode nur ein Result, zum messen brauche ich aber alle (deswegen arrays bei K und S)
   }
 
   public void outputResults() {
@@ -135,14 +172,16 @@ public class TEASERClassifierRealtimeManager {
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
 
-    for(int i = 0; i < sValues.length; i++) { // 3 SN, 10 SN, defaultTeaser(20 SN spart traintime), 50 SN, lenght SN
+    ForkJoinPool customThreadPool = new ForkJoinPool(60);
+    customThreadPool.submit(() -> IntStream.range(0, sValues.length).parallel().forEach(i -> {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
       teaserInst[i].S = sValues[i]; // teaser erhöht S um 1
       Classifier.Score score = teaserInst[i].fit_and_measure(trainSamples);
 
       scores[i] = new double[] {score.getTrainingAccuracy(), score.getTestEarliness(), teaserInst[i].min_prediction_frequency}; // der score wird von teaser nur durch eval() gefüllt. ich schreibe die earliness nach dem predict der traindaten hinein
       // theorethisch könnte hier abgebrochen werden, wenn die min_prediction_frequency > samplingrate gilt. Weil dann eine RealtimeInstanz gefunden wurde. Ich brauche aber alle Messungen
-    }
+    })).join(); // ab hier nicht mehr parallel
+
     // prediction auf traindaten -> beste instanz auswählen (brauche hier acc, earl, duration/min_prediction_freq)
     int instNr = getBestRealtimeInst(scores);
     //System.out.println(Arrays.deepToString(scores));
@@ -170,7 +209,8 @@ public class TEASERClassifierRealtimeManager {
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
     
-    for(int i = 0; i < kValues.length; i++) {
+    ForkJoinPool customThreadPool = new ForkJoinPool(60);
+    customThreadPool.submit(() -> IntStream.range(0, kValues.length).parallel().forEach(i -> {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
       teaserInst[i].K = kValues[i];
       teaserInst[i].ts_len = trainSamples[0].getLength();
@@ -178,7 +218,8 @@ public class TEASERClassifierRealtimeManager {
 
       scores[i] = new double[] {score.getTrainingAccuracy(), score.getTestEarliness(), teaserInst[i].min_prediction_frequency * kValues[i]}; // der score wird von teaser nur durch eval() gefüllt. ich schreibe die earliness nach dem predict der traindaten hinein
       // theorethisch könnte hier abgebrochen werden, wenn die min_prediction_frequency > samplingrate gilt. Weil dann eine RealtimeInstanz gefunden wurde. Ich brauche aber alle Messungen
-    }
+    })).join(); // ab hier nicht mehr parallel
+
     // prediction auf traindaten -> beste instanz auswählen (brauche hier acc, earl, duration/min_prediction_freq)
     int instNr = getBestRealtimeInst(scores);
     //System.out.println(Arrays.deepToString(scores));
@@ -226,6 +267,15 @@ public class TEASERClassifierRealtimeManager {
       }
     }
     return min;
+  }
+
+  private double getAvgFrequency(Double[] seriesFrequencys) {
+    double avg = 0;
+    for(int i = 0; i < seriesFrequencys.length; i++) { 
+      avg += seriesFrequencys[i];
+    }
+    avg = avg / seriesFrequencys.length;
+    return avg;
   }
 
   private int getBestRealtimeInst(double[][] scores) { // realtime ist ein hartes kriterium, unter allen realtime instanzen wird die mit dem besten harmonic mean von accuracy und earliness gewählt // wenn es keine realtimeinstanz gibt, wählen wir die instanz, mit der höchsten avg frequenz
