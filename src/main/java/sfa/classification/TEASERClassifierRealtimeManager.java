@@ -93,20 +93,20 @@ public class TEASERClassifierRealtimeManager {
   public predictionResults[][] manageRealtime() { // ev. noch die anzätze kombinieren
     // Train the default Teaser
     defaultTeaser = new TEASERClassifierRealtime();
-    //Classifier.Score scoreDefaultTeaser = defaultTeaser.fit_and_measure(this.trainSamples);
-    //System.out.println(scoreDefaultTeaser); // debugging
+    Classifier.Score scoreDefaultTeaser = defaultTeaser.fit_and_measure(this.trainSamples);
+    System.out.println(scoreDefaultTeaser); // debugging
     
     // nicht parallele ausführung
-    //predictionResults defaultTeaserResults = defaultTeaser_predict(samplingrate);
-    //predictionResults skippingTeaserResults = skippingTeaser_predict(samplingrate);
-    //predictionResults[] STeaserResults = STeaser_predict(samplingrate);
-    //predictionResults[] KTeaserResults = KTeaser_predict(samplingrate);
-
+    predictionResults defaultTeaserResults = defaultTeaser_predict(samplingrate);
+    predictionResults skippingTeaserResults = skippingTeaser_predict(samplingrate);
+    predictionResults[] STeaserResults = STeaser_predict(samplingrate);
+    predictionResults[] KTeaserResults = KTeaser_predict(samplingrate);
+    /* // Diese Parallele Ausführung führt zu Sprüngen in der Ausführungszeit (ev. wegen der Threadverwaltung)
     // Erstelle einen ForkJoinPool
     ForkJoinPool forkJoinPool = new ForkJoinPool();
 
     // Variablen für die Ergebnisse
-    predictionResults[][] temp_results = new predictionResults[4][];
+    predictionResults[][] temp_results = new predictionResults[4][]; // eigentlich 4 zum debuggen 1
 
     // Führe die Aufgaben parallel aus
     forkJoinPool.submit(() -> {
@@ -132,11 +132,12 @@ public class TEASERClassifierRealtimeManager {
     while (!forkJoinPool.isTerminated()) {
         // Warten bis alle Aufgaben abgeschlossen sind
     }
+    */
     System.out.println("Frequency done: " + samplingrate);
 
-    results = temp_results;//new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults};
+    results = new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults};
     //outputResults();
-    return temp_results;//new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults}; // eigentlich liefert jede Methode nur ein Result, zum messen brauche ich aber alle (deswegen arrays bei K und S)
+    return new predictionResults[][] {new predictionResults[] {defaultTeaserResults}, new predictionResults[] {skippingTeaserResults}, STeaserResults, KTeaserResults}; // eigentlich liefert jede Methode nur ein Result, zum messen brauche ich aber alle (deswegen arrays bei K und S)
   }
 
   public void outputResults() {
@@ -172,7 +173,7 @@ public class TEASERClassifierRealtimeManager {
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
 
-    ForkJoinPool customThreadPool = new ForkJoinPool(60);
+    ForkJoinPool customThreadPool = new ForkJoinPool(5);
     customThreadPool.submit(() -> IntStream.range(0, sValues.length).parallel().forEach(i -> {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
       teaserInst[i].S = sValues[i]; // teaser erhöht S um 1
@@ -209,7 +210,7 @@ public class TEASERClassifierRealtimeManager {
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
     
-    ForkJoinPool customThreadPool = new ForkJoinPool(60);
+    ForkJoinPool customThreadPool = new ForkJoinPool(5);
     customThreadPool.submit(() -> IntStream.range(0, kValues.length).parallel().forEach(i -> {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
       teaserInst[i].K = kValues[i];

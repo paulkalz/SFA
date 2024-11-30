@@ -69,6 +69,8 @@ public class TimeSeriesLoader {
         }
         if (j > 0) {
           TimeSeries ts = new TimeSeries(Arrays.copyOfRange(data, 0, columns.length-1), label); // Changed j to columns.length, so NaN puffer Values in variable-length Datasets are no longer ignored <- does not work ev. columns.length-1 (data without label)
+          //System.out.println(ts.getLabel()); // debug
+          //System.out.println(Arrays.toString(ts.getData())); // debug
           ts.norm();
           samples.add(ts);
         }
@@ -78,7 +80,7 @@ public class TimeSeriesLoader {
       e.printStackTrace();
     }
 
-    System.out.println("Done reading from " + dataset.getName() + " samples " + samples.size() + " queryLength " + samples.get(0).getLength());
+    System.out.println("Done reading from " + dataset.getName() + " samples " + samples.size() + " queryLength (first query) " + samples.get(0).getLength());
     return samples.toArray(new TimeSeries[]{});
   }
 

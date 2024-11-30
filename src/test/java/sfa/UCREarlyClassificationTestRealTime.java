@@ -33,12 +33,13 @@ public class UCREarlyClassificationTestRealTime {
   
   // The datasets to use
   public static String[] datasets = new String[]{
-          "Chinatown", // acc = 93%
+          //"Chinatown", // acc = 93%
+          //"Coffee", // Dauert 20min auf Laptop
           "ECG200",
-          "GunPoint",
+          //"GunPoint",
           //"PLAID",
           //"SonyAIBORobotSurface1",
-          //"DodgerLoopDay", // acc = 54%, weil heaperror
+          "DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
   };
   public static String[] ucr_freq_datasets = new String[]{ // 16h auf gruenau6
@@ -238,12 +239,19 @@ public class UCREarlyClassificationTestRealTime {
       //File dir = new File("/Users/bzcschae/workspace/similarity/datasets/classification");
 
       TimeSeries.APPLY_Z_NORM = false;
+      long heapSize = Runtime.getRuntime().totalMemory();
+      long maxHeapSize = Runtime.getRuntime().maxMemory();
+      long freeHeapSize = Runtime.getRuntime().freeMemory();
+      System.out.println("aktuelle Heap groesse: " + heapSize / (1024 * 1024) + "MB");
+      System.out.println("maximale Heap groesse: " + maxHeapSize / (1024 * 1024) + "MB");
+      System.out.println("freie Heap groesse: " + freeHeapSize / (1024 * 1024) + "MB");
 
-      int n = datasets_ucr.length; // Anzahl der parallelen Streams
-      ForkJoinPool customThreadPool = new ForkJoinPool(60); // gruenau6 hat 120 threads, ich darf maximal 50% davon verwenden
-      customThreadPool.submit(() -> IntStream.range(0, n).parallel().forEach(stream -> {
-      //IntStream.range(0, n).parallel().forEach(stream -> { // stream ist nur eine laufvariable
-        String s = datasets_ucr[stream];
+      //int n = datasets.length; // Anzahl der parallelen Streams
+      //ForkJoinPool customThreadPool = new ForkJoinPool(60); // gruenau6 hat 120 threads, ich darf maximal 50% davon verwenden
+      //customThreadPool.submit(() -> IntStream.range(0, n).parallel().forEach(stream -> {
+        //IntStream.range(0, n).parallel().forEach(stream -> { // stream ist nur eine laufvariable
+      //String s = datasets[stream];
+      for(String s : datasets) {
         
         System.out.println("Aktuelles Dataset: " + s);
         File d = new File(dir.getAbsolutePath() + "/" + s); 
@@ -307,8 +315,13 @@ public class UCREarlyClassificationTestRealTime {
                   "Please download datasets from [http://www.cs.ucr.edu/~eamonn/time_series_data/].");
         }
 
-
-      })).join(); // ab hier nicht mehr parallel
+        System.gc(); // jetzt ist ein guter Zeitpunkt für eine Garbage Collection zwischen 2 Datasets
+        try {
+          Thread.sleep(10000); // 10 Second pause
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } // 10 seconds
+      }//)).join(); // ab hier nicht mehr parallel
       System.out.println("Done");
     } finally {
       TimeSeries.APPLY_Z_NORM = true; // FIXME static variable breaks some test cases!

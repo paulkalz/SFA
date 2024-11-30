@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-#dateipfad = os.path.abspath("plot_measurements/measurements.txt") # nutzt aktuelle logs
-dateipfad = os.path.abspath("plot_measurements/measurements_56datasets.txt") # nutzt gerade nicht die aktuelle logs
+dateipfad = os.path.abspath("plot_measurements/measurements.txt") # nutzt aktuelle logs
+#dateipfad = os.path.abspath("plot_measurements/measurements_56datasets.txt") # nutzt gerade nicht die aktuelle logs
 
 with open(dateipfad, 'r', encoding='utf-8') as datei:
     zeilen = datei.readlines()
@@ -72,8 +72,8 @@ def getPredictionTime(ts):
 def getClassificationFrequency(ts, ts_len):
     time = getPredictionTime(ts) / 1000 # time in seconds
     arr = list(map(float, ts[1:-1].split(","))) #trim_zeros(list(map(float, arr[2:-1].split(", "))))
-    usedPoints = len(processTS(arr, ts_len))-1
-    return usedPoints / usedPoints
+    usedPoints = len(processTS(ts, ts_len))-1
+    return usedPoints / time # returns frequency in hz
 
 def getRealtimeTime(used_datapoints, samplingrate): # zeit, die für used_datapoints Punkte bei Klassifikation in der samplingrate gebraucht wird (in ms)
     return used_datapoints / (samplingrate / 1000)
@@ -304,7 +304,7 @@ def plot_measurement_points(startline, ts_len): # input: eine feste frequenz, de
 
 dataset_counter = 0; # startzeile des aktuellen datasets
 current_dataset_headline = ""
-current_dataset_headline_index = 0;
+current_dataset_headline_index = 0
 def four_strategies_plot(): # x-Achse sind datapoints, y-Achse sind ms
     counter = 0; # subplot index
     for i in range(len(zeilen)):
@@ -315,7 +315,7 @@ def four_strategies_plot(): # x-Achse sind datapoints, y-Achse sind ms
             current_dataset_headline_index = i
         if (zeilen[i][0] == "T"): # neue messung beginnt
             counter += 1
-            plt.subplot(2,6, counter)
+            plt.subplot(5,6, counter)
             headerzeile = zeilen[i].split(" ")
             plt.title(headerzeile[0] + "\n" + headerzeile[1][:4] + " acc " + headerzeile[2][:4] + " early \n" + headerzeile[3][:4] + "avg. ms " + headerzeile[4].split(".")[0] + "Hz")
             plt.subplots_adjust(hspace=0.5)
@@ -323,21 +323,58 @@ def four_strategies_plot(): # x-Achse sind datapoints, y-Achse sind ms
             plt.grid(True)
             plt.xlabel('Datapoints')
             ts_len = current_dataset_headline.split(" ")[2]
-            #plot_default_points(current_dataset_headline_index, 21, ts_len)
-            plot_first_default_point(current_dataset_headline_index, ts_len)
+            plot_default_points(current_dataset_headline_index, 21, ts_len)
+            #plot_first_default_point(current_dataset_headline_index, ts_len)
+            #plotAverageDefault(current_dataset_headline_index, ts_len, "yellow", zeilen[i].split(" ")[0])
+            if not zeilen[i-1] == current_dataset_headline: # der erste subplot sind nur die default werte
+                plot_measurement_points(i, ts_len)
+                #plot_first_measurement_points(i, ts_len)
+                #plotAverageMeasurement(i, ts_len, "red", zeilen[i].split(" ")[0])
+            plot_realtimeline(current_dataset_headline.split(" ")[1], ts_len, ts_len) # wenn S == len(TS), dann ist die x-Achse datapoints
+        if counter == 30: # neue Grafik anfangen
+            counter = 0
+            plt.show()
+            
+    plt.show()
+
+four_strategies_plot() # average oder punkte auskommentieren
+
+dataset_counter = 0; # startzeile des aktuellen datasets
+current_dataset_headline = ""
+current_dataset_headline_index = 0
+def default_plot(): # x-Achse sind datapoints, y-Achse sind ms
+    counter = 0; # subplot index
+    for i in range(len(zeilen)):
+        if(zeilen[i][0] == "N"): # neues Dataset beginnt (eigentlich neue frequenz)
+            print("new Dataset found: " + zeilen[i])
+            plt.suptitle(zeilen[i].split("_")[1] + "\n ")
+            current_dataset_headline = zeilen[i]
+            current_dataset_headline_index = i
+        if (zeilen[i].split(" ")[0] == "TEASER_Default"): # neue messung beginnt
+            counter += 1
+            plt.subplot(4,5, counter)
+            headerzeile = zeilen[i].split(" ")
+            plt.title(current_dataset_headline.split("_")[1] + "\n" + headerzeile[1][:4] + " acc " + headerzeile[2][:4] + " early \n" + headerzeile[3][:4] + "avg. ms " + headerzeile[4].split(".")[0] + "Hz")
+            plt.subplots_adjust(hspace=0.5)
+            plt.ylabel('Predictiontime in ms')
+            plt.grid(True)
+            plt.xlabel('Datapoints')
+            ts_len = current_dataset_headline.split(" ")[2]
+            plot_default_points(current_dataset_headline_index, 21, ts_len)
+            #plot_first_default_point(current_dataset_headline_index, ts_len)
             #plotAverageDefault(current_dataset_headline_index, ts_len, "yellow", zeilen[i].split(" ")[0])
             if not zeilen[i-1] == current_dataset_headline: # der erste subplot sind nur die default werte
                 #plot_measurement_points(i, ts_len)
                 plot_first_measurement_points(i, ts_len)
                 #plotAverageMeasurement(i, ts_len, "red", zeilen[i].split(" ")[0])
             plot_realtimeline(current_dataset_headline.split(" ")[1], ts_len, ts_len) # wenn S == len(TS), dann ist die x-Achse datapoints
-        if counter == 12: # neue Grafik anfangen
+        if counter == 20: # neue Grafik anfangen
             counter = 0
             plt.show()
             
     plt.show()
 
-#four_strategies_plot() # average oder punkte auskommentieren
+#default_plot()
 
 dataset_counter = 0; # startzeile des aktuellen datasets
 current_dataset_headline = ""
@@ -390,6 +427,7 @@ def plot_dataset(): # plot eines Datasets, ein Diagramm pro frequenz mit allen M
 
 ### Statistik ###
 
+# Anteil der TS, die in realtime klassifiziert wurden
 def getRealtimePercentage(startline, samplingrate, ts_len): # startline muss der Beginn einer neuen Messmethode sein // zeile muss mit "T" beginnen
     counter = 0
     realtime_counter = 0
@@ -418,6 +456,30 @@ def getAvgPredictionTime(startline):
             avgPredictionTime += getPredictionTime(zeilen[i])
     return avgPredictionTime / counter
 
+def getAvgPredictionFrequency(startline, ts_len):
+    avgPredictionFrequency = 0
+    counter = 0
+    for i in range(startline+1, len(zeilen)):
+        if(zeilen[i][0] != "["):
+            break
+        else:
+            counter += 1
+            processed_ts = processTS(zeilen[i], ts_len)
+            used_datapoints = len(processed_ts)-1
+            used_time = processed_ts[-1]
+            ts_frequency = used_datapoints / (used_time / 1000)
+            #print(str(ts_frequency) + " " + str(getClassificationFrequency(zeilen[i], ts_len))) # zum test
+            if(ts_frequency < 1000000): # bei kurzen TS mit großem K enthält der erste Snapshot alle Datenpunkte -> sofort Klassifizieren
+                #print(zeilen[i])
+                #print(i)
+                #print(processed_ts)
+                #print(used_datapoints)
+                #print(used_time/1000)
+                continue
+            counter += 1
+            avgPredictionFrequency += ts_frequency
+    return avgPredictionFrequency / counter
+
 
 
 def getDatasetScores(startline): # acc, early, realtime_percentage pro Methode pro testfrequenz // für gesamtaussagen // startline = index der zeile mit "DATASET: "
@@ -433,9 +495,11 @@ def getDatasetScores(startline): # acc, early, realtime_percentage pro Methode p
         if(zeilen[i][0] == "T"): # neue Methode beginnt (in dieser Zeile sind alle Informationen)
             stats_line = zeilen[i].split(" ")
             name = stats_line[0].split("(")[0]
+            minPredictionFrequency = float(stats_line[4]) # nicht besonders gut darzustellen
+            avgPredictionFrequency = getAvgPredictionFrequency(i, ts_len) # gibt einige ausreißer, die das bild verzerren
             if len(stats_line[0].split("(")) > 1:
                 name = stats_line[0].split("(")[0][:-1]
-            res.append([dataset_name, current_frequency, name, float(stats_line[1]), float(stats_line[2]), getRealtimePercentage(i, float(current_frequency), ts_len), getAvgPredictionTime(i)]) # [dataset, freq, method, acc, earl, realtime_percentage, avgPredictionTime]
+            res.append([dataset_name, current_frequency, name, float(stats_line[1]), float(stats_line[2]), getRealtimePercentage(i, float(current_frequency), ts_len), getAvgPredictionTime(i), avgPredictionFrequency]) # [dataset, freq, method, acc, earl, realtime_percentage, avgPredictionTime]
         if(zeilen[i][0] == "D"):
             break # das nächste Dataset beginnt
     
@@ -449,15 +513,17 @@ def getAllDatasetScores(): # aus dem result einen dataframe machen
     return res
 
 def calculateAverageBarchart(): #  min_frequency ist ein sehr schlechter wert, hat wenig aussagekraft
-    df = pd.DataFrame(getAllDatasetScores(), columns=['Dataset', 'frequency', 'Method', 'Accuracy', 'Earliness', 'realtime_percentage', 'avg_PredictionTime'])
+    df = pd.DataFrame(getAllDatasetScores(), columns=['Dataset', 'frequency', 'Method', 'Accuracy', 'Earliness', 'realtime_percentage', 'avg_PredictionTime', 'avgPredictionFrequency'])
     df['Accuracy'] = df['Accuracy'].astype(float)
     df['Earliness'] = df['Earliness'].astype(float)
     df['realtime_percentage'] = df['realtime_percentage'].astype(float)
     df['avg_PredictionTime'] = df['avg_PredictionTime'].astype(float)
+    df['avgPredictionFrequency'] = df['avgPredictionFrequency'].astype(float)
     #print(df.head(50))
     #print(df.groupby(['frequency', 'Method']).agg({'Accuracy': ['mean'], 'Earliness': ['mean'], 'realtime_percentage': ['mean'], 'avg_PredictionTime': ['mean']}).head(50))
-    grouped_df = df.groupby(['frequency', 'Method'], as_index=False).agg({'Accuracy': ['mean'], 'Earliness': ['mean'], 'realtime_percentage': ['mean'], 'avg_PredictionTime': ['mean']})
+    grouped_df = df.groupby(['frequency', 'Method'], as_index=False).agg({'Accuracy': ['mean'], 'Earliness': ['mean'], 'realtime_percentage': ['mean'], 'avg_PredictionTime': ['mean'], 'avgPredictionFrequency': ['min']})
     grouped_df = grouped_df.drop(['avg_PredictionTime'], axis=1) # Prediction time ist nicht auf der glechen Skala (0 bis 1, wie die anderen werte)
+    grouped_df = grouped_df.drop(['avgPredictionFrequency'], axis=1) # auch nicht gleiche Skala
     for i in df['frequency'].unique():
         frequency_group_df = grouped_df.loc[grouped_df['frequency'] == i].drop(['frequency'], axis=1).sort_values(by=['Method'], ascending=True)
         #print(frequency_group_df.head(50))
@@ -471,15 +537,15 @@ def calculateAverageBarchart(): #  min_frequency ist ein sehr schlechter wert, h
 
 #calculateAverageBarchart()
 
-def calculateAverageBarchart_twoAxis(): #  acc, early, avg_predictionTime
-    df = pd.DataFrame(getAllDatasetScores(), columns=['Dataset', 'frequency', 'Method', 'Accuracy', 'Earliness', 'realtime_percentage', 'avg_PredictionTime'])
+def calculateAverageBarchart_twoAxis(): #  acc, early, avg_predictionTime # Diese Grafik von einzelnen Datasets macht keinen sinn
+    df = pd.DataFrame(getAllDatasetScores(), columns=['Dataset', 'frequency', 'Method', 'Accuracy', 'Earliness', 'realtime_percentage', 'avg_PredictionTime', 'avgPredictionFrequency'])
     df['Accuracy'] = df['Accuracy'].astype(float)
     df['Earliness'] = df['Earliness'].astype(float)
     df['realtime_percentage'] = df['realtime_percentage'].astype(float)
     df['avg_PredictionTime'] = df['avg_PredictionTime'].astype(float)
     #print(df.head(50))
     #print(df.groupby(['frequency', 'Method']).agg({'Accuracy': ['mean'], 'Earliness': ['mean'], 'realtime_percentage': ['mean'], 'avg_PredictionTime': ['mean']}).head(50))
-    grouped_df = df.groupby(['frequency', 'Method'], as_index=False).agg({'Accuracy': ['mean'], 'Earliness': ['mean'], 'realtime_percentage': ['mean'], 'avg_PredictionTime': ['mean']})
+    grouped_df = df.groupby(['frequency', 'Method'], as_index=False).agg({'Accuracy': ['mean'], 'Earliness': ['mean'], 'realtime_percentage': ['mean'], 'avg_PredictionTime': ['mean'], 'avgPredictionFrequency': ['mean']})
     #grouped_df = grouped_df.drop(['avg_PredictionTime'], axis=1) # Prediction time ist nicht auf der glechen Skala (0 bis 1, wie die anderen werte)
     for i in df['frequency'].unique():
         frequency_group_df = grouped_df.loc[grouped_df['frequency'] == i].drop(['frequency'], axis=1).sort_values(by=['Method'], ascending=True)
@@ -496,17 +562,33 @@ def calculateAverageBarchart_twoAxis(): #  acc, early, avg_predictionTime
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax2 = ax.twinx()
         width = 0.1
         fig.suptitle(''+i+'Hz')
         frequency_group_df.plot(x='Method', y='Accuracy', kind='bar', color='red', stacked=False, ax=ax, rot=0, position=2, width=width)
         frequency_group_df.plot(x='Method', y='Earliness', kind='bar', color='blue', ax=ax, rot=0, position=1, width=width)
         frequency_group_df.plot(x='Method', y='realtime_percentage', kind='bar', color='green', ax=ax, rot=0, position=0, width=width)
+        #ax.legend(['Accuracy', 'Earliness', 'realtime_percentage'])
+        ax2 = ax.twinx()
         frequency_group_df.plot(x='Method', y='avg_PredictionTime', kind='bar', color='purple', ax=ax2, rot=0, position=-1, width=width)
-        plt.legend() # die legende ist an zufälliger Stelle, und hat keine einträge, neue farben wählen, alle bars in den frame rücken
+        #frequency_group_df.plot(x='Method', y='avgPredictionFrequency', kind='bar', color='black', ax=ax2, rot=0, position=-2, width=width)
+        #ax2.legend(['avg_PredictionTime'])
+        ax.set_ylabel('Accuracy / Earliness / RealtimePercentage')
+        ax2.set_ylabel('avg. PredictionTime in Milliseconds')
+        # Legenden kombinieren
+        #labels1 = ['Accuracy', 'Earliness', 'Realtime Percentage']
+        #labels2 = ['Avg_PredictionTime']
+        handles1, labels1 = ax.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+
+        # Kombinierte Legende erstellen
+        ax2.legend(handles1 + handles2, ['Accuracy', 'Earliness', 'Realtime Percentage', 'PredictionTime (avg.)'], loc='upper right')#, bbox_to_anchor=(1, 1), bbox_transform=fig.transFigure)
+        ax.get_legend().remove()
+        ax.set_xlim(-0.5, len(frequency_group_df) - 0.5) # Setze die x-Achsen-Grenzen
+        #plt.legend() # die legende ist an zufälliger Stelle, und hat keine einträge, neue farben wählen, alle bars in den frame rücken
+        #plt.tight_layout(rect=[0,0,1,0.9])
         plt.show()
 
-calculateAverageBarchart_twoAxis()
+#calculateAverageBarchart_twoAxis()
 
 
 #four_strategies_plot() # def_skip_s_sskip_k_kskip_pointsForMeasurement

@@ -6,6 +6,8 @@ import de.bwaldvogel.liblinear.SolverType;
 import libsvm.*;
 import sfa.timeseries.TimeSeries;
 
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.util.*;
 
 /**
@@ -199,7 +201,7 @@ public class TEASERClassifierRealtimeInst extends Classifier {
         max = Math.max(ts.getLength(), max);
       }
       double step = max / S; // steps of 5% // maximal 12,5 bei S=20 und WindowLen=250
-
+      // wenn die pufferwerte nicht mitgeladen werden, und wir eine ts mit länge 250 und eine ts mit länge 25 haben und S=10, ist die schirittgröße = 25
       this.model = new EarlyClassificationModel();
 
       for (int s = 2; s <= S; s++) {
@@ -446,6 +448,15 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     return (int) S; // es ist nicht mehr moeglich schnell genug zu sein // ich skippe zum letzten snapshot
   }
 
+  // damit rechne ich mögliche Pausierungen des Codes duch den JavaGarbageCollector aus meiner Zeitmessung heraus
+  private static long getTotalGCTime() { // Aktivitätsdauer des GarbageCollectors
+        long totalGCTime = 0;
+        for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
+            totalGCTime += gcBean.getCollectionTime();
+        }
+        return totalGCTime; // in ms
+  }
+
   private OffsetPrediction predict(
       final TimeSeries[] testSamples,
       final boolean testing) {
@@ -475,6 +486,9 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     //System.out.println();
     //System.out.println(Arrays.toString(extractUntilOffset(testSamples, model.offsets[2], true)[0].getData()));
     //printJVMMemory();
+    long gcStartTime = getTotalGCTime();
+    long gcCurrentTime = gcStartTime;
+    long gcDuration = 0;
     long startTimePred = System.nanoTime();
     //timesPerSnapshot[0] = (double) (System.nanoTime() - startTimePred) / 1000000;
 
@@ -544,14 +558,20 @@ public class TEASERClassifierRealtimeInst extends Classifier {
           if (count == testSamples.length && !disable_earlyness) { // stoppen, wenn alle TS eine prediction haben // mit disable_earliness werden alle Snapshots predicted
             //if(testing) {System.out.println("PREDICTION");}
             //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // Dauer bis zur entgültigen Klassifikation
-            timesPerSnapshot[s] = (double) (System.nanoTime() - startTimePred) / 1000000; // jetzt wurde klassifiziert
+            gcCurrentTime = getTotalGCTime();
+            gcDuration = gcCurrentTime - gcStartTime;
+            //if(gcDuration > 0) {System.out.println(gcDuration);}
+            timesPerSnapshot[s] = ((double) (System.nanoTime() - startTimePred) / 1000000) - gcDuration;
             //if(testing) {System.out.println(Arrays.toString(timesPerSnapshot));}
             break predict;
           }
         }
       }
       //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // nach jeder Snapshotklassifikation ausgeben, wie lange wir schon klasifizieren
-      timesPerSnapshot[s] = (double) (System.nanoTime() - startTimePred) / 1000000; // Es wurde noch nicht Klassifiziert
+      gcCurrentTime = getTotalGCTime();
+      gcDuration = gcCurrentTime - gcStartTime;
+      //if(gcDuration > 0) {System.out.println(gcDuration);}
+      timesPerSnapshot[s] = ((double) (System.nanoTime() - startTimePred) / 1000000) - gcDuration;
     }
 
     // per Class counts
