@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 dateipfad = os.path.abspath("plot_measurements/measurements.txt") # nutzt aktuelle logs
-#dateipfad = os.path.abspath("plot_measurements/measurements_56datasets.txt") # nutzt gerade nicht die aktuelle logs
+#dateipfad = os.path.abspath("plot_measurements/measurements_75datasets.txt") # nutzt gerade nicht die aktuelle logs
 
 with open(dateipfad, 'r', encoding='utf-8') as datei:
     zeilen = datei.readlines()
