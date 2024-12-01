@@ -317,7 +317,7 @@ def four_strategies_plot(): # x-Achse sind datapoints, y-Achse sind ms
             counter += 1
             plt.subplot(5,6, counter)
             headerzeile = zeilen[i].split(" ")
-            plt.title(headerzeile[0] + "\n" + headerzeile[1][:4] + " acc " + headerzeile[2][:4] + " early \n" + headerzeile[3][:4] + "avg. ms " + headerzeile[4].split(".")[0] + "Hz")
+            plt.title(headerzeile[0] + "\n" + headerzeile[1][:4] + " acc " + headerzeile[2][:4] + " early \n" + headerzeile[3][:4] + "avg. ms " + headerzeile[4].split(".")[0] + "min_Hz")
             plt.subplots_adjust(hspace=0.5)
             plt.ylabel('Predictiontime in ms')
             plt.grid(True)

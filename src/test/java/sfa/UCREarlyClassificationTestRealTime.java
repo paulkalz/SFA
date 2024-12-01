@@ -33,13 +33,13 @@ public class UCREarlyClassificationTestRealTime {
   
   // The datasets to use
   public static String[] datasets = new String[]{
-          //"Chinatown", // acc = 93%
-          //"Coffee", // Dauert 20min auf Laptop
-          "ECG200",
-          //"GunPoint",
+          "Chinatown", // acc = 93%
+          "Coffee", // Dauert 20min auf Laptop
+          //"ECG200",
+          "GunPoint",
           //"PLAID",
           //"SonyAIBORobotSurface1",
-          "DodgerLoopDay", // acc = 54%, weil heaperror
+          //"DodgerLoopDay", // acc = 54%, weil heaperror
           //"EOGHorizontalSignal",
   };
   public static String[] ucr_freq_datasets = new String[]{ // 16h auf gruenau6
@@ -346,6 +346,137 @@ public static String[] datasets_ucr2_now = new String[]{ // datasets, die aktuel
   //"CricketZ", // Heap Error
   "PLAID", // datei ist ziemlich groß
 };
+public static String[] datasets_sorted= new String[]{ // datasets nach groesse der train file sortiert
+"Chinatown",
+"SonyAIBORobotSurface1",
+"DodgerLoopWeekend",
+"DodgerLoopGame",
+"ItalyPowerDemand",
+"MoteStrain",
+"SonyAIBORobotSurface2",
+"TwoLeadECG",
+"SmoothSubspace",
+"BME",
+"ECGFiveDays",
+"Fungi",
+"CBF",
+"UMD",
+"DiatomSizeReduction",
+"DodgerLoopDay",
+"PickupGestureWiimoteZ",
+"InsectEPGSmallTrain",
+"GunPoint",
+"Coffee",
+"FreezerSmallTrain",
+"ShakeGestureWiimoteZ",
+"FaceFour",
+"ArrowHead",
+"ECG200",
+"Symbols",
+"ShapeletSim",
+"BirdChicken",
+"BeetleFly",
+"MelbournePedestrian",
+"ToeSegmentation1",
+"PowerCons",
+"ToeSegmentation2",
+"Wine",
+"Beef",
+"Plane",
+"OliveOil",
+"SyntheticControl",
+"GunPointMaleVersusFemale",
+"GunPointAgeSpan",
+"GunPointOldVersusYoung",
+"Lightning7",
+"FacesUCR",
+"InsectEPGRegularTrain",
+"GesturePebbleZ1",
+"Trace",
+"Meat",
+"GesturePebbleZ2",
+"HouseTwenty",
+"MiddlePhalanxTW",
+"MiddlePhalanxOutlineAgeGroup",
+"DistalPhalanxOutlineAgeGroup",
+"DistalPhalanxTW",
+"ProximalPhalanxTW",
+"ProximalPhalanxOutlineAgeGroup",
+"Herring",
+"Car",
+"Rock",
+"MedicalImages",
+"GestureMidAirD2",
+"Lightning2",
+"GestureMidAirD3",
+"GestureMidAirD1",
+"FreezerRegularTrain",
+"MiddlePhalanxOutlineCorrect",
+"DistalPhalanxOutlineCorrect",
+"ProximalPhalanxOutlineCorrect",
+"Ham",
+"Mallat",
+"InsectWingbeatSound",
+"AllGestureWiimoteZ",
+"AllGestureWiimoteX",
+"AllGestureWiimoteY",
+"SwedishLeaf",
+"CinCECGTorso",
+"Adiac",
+"ECG5000",
+"WordSynonyms",
+"FaceAll",
+"ChlorineConcentration",
+"Fish",
+"OSULeaf",
+"MixedShapesSmallTrain",
+"CricketY",
+"CricketX",
+"CricketZ",
+"FiftyWords",
+"Yoga",
+"TwoPatterns",
+"PhalangesOutlinesCorrect",
+"Strawberry",
+"ACSF1",
+"Wafer",
+"Worms",
+"WormsTwoClass",
+"Haptics",
+"Earthquakes",
+"PigAirwayPressure",
+"PigCVP",
+"PigArtPressure",
+"Crop",
+"Computers",
+"InlineSkate",
+"Phoneme",
+"RefrigerationDevices",
+"ScreenType",
+"UWaveGestureLibraryY",
+"UWaveGestureLibraryX",
+"UWaveGestureLibraryZ",
+"LargeKitchenAppliances",
+"SmallKitchenAppliances",
+"ShapesAll",
+"EOGHorizontalSignal",
+"EOGVerticalSignal",
+"PLAID",
+"SemgHandGenderCh2",
+"MixedShapesRegularTrain",
+"SemgHandSubjectCh2",
+"SemgHandMovementCh2",
+"UWaveGestureLibraryAll",
+"ElectricDevices",
+"EthanolLevel",
+"StarLightCurves",
+"NonInvasiveFetalECGThorax1",
+"NonInvasiveFetalECGThorax2",
+"FordA",
+"FordB",
+"HandOutlines",  
+
+};
 
   HashMap<String, Double[]> datasetFrequencys = new HashMap<String, Double[]>() {{ // echte Samplingfrequenzen der Datasets in Hz // und andere testfrequenzen
       put("Chinatown", new Double[] {0.0002777, 1000.0, 10000.0, 20000.0, 50000.0});
@@ -429,7 +560,7 @@ public static String[] datasets_ucr2_now = new String[]{ // datasets, die aktuel
       //customThreadPool.submit(() -> IntStream.range(0, n).parallel().forEach(stream -> {
         //IntStream.range(0, n).parallel().forEach(stream -> { // stream ist nur eine laufvariable
       //String s = datasets[stream];
-      for(String s : datasets_ucr) {
+      for(String s : datasets_sorted) {
         
         System.out.println("Aktuelles Dataset: " + s);
         File d = new File(dir.getAbsolutePath() + "/" + s); 
@@ -494,11 +625,7 @@ public static String[] datasets_ucr2_now = new String[]{ // datasets, die aktuel
         }
 
         System.gc(); // jetzt ist ein guter Zeitpunkt für eine Garbage Collection zwischen 2 Datasets
-        try {
-          Thread.sleep(10000); // 10 Second pause
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        } // 10 seconds
+
       }//)).join(); // ab hier nicht mehr parallel
       System.out.println("Done");
     } finally {

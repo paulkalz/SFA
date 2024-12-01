@@ -496,7 +496,7 @@ public class TEASERClassifierRealtimeInst extends Classifier {
     for (int s = 0; s < model.slaveModels.length; s++) { // S + 1 Wealsel (slaves) (im normalfall 21) mit jedem durchlauf wurde auf 5% mehr daten trainiert
       //if(testing && skip && s % 2 == 0){continue;} // jeden zweiten Snapshot überspringen
       //if(testing && skip && s < S*0.9 && s > S*0.2){s=(int)(S*0.9);} // die ersten 90% Snapshots überspringen // damit verkaufe ich die earliness
-      if(model.masterModels[s] != null && testing && skip) {s = nextSnapshot(originalDatasetFrequency, 0 > s-1 ? 0 : s-1, (double) (System.nanoTime() - startTimePred) / 1000000);}
+      if(model.masterModels[s] != null && testing && skip) {s = nextSnapshot(originalDatasetFrequency, 0 > s-1 ? 0 : s-1, ((double) (System.nanoTime() - startTimePred) / 1000000) - (getTotalGCTime() - gcStartTime));}
       // aktuellen Snapshot überspringen, wenn wir zu langsam sind (letzter Snapshot hatte zu geringe frequenz) // Backlog verhindern
       // muss noch sichergehen, dass s wirklich immer nur bis 21 geht. Verstehe nicht wie die Earliness 0.19 sein kann, wenn ich die ersten 10 Snapshots überspringe 1250 Samples (eoghorizontalsignal)
       // -> vermute das ist wegen der windowlength (muss mir nochmal die earlinessberechnung anschauen)
