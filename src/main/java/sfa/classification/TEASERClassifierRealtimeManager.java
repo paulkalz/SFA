@@ -10,6 +10,9 @@ import sfa.timeseries.TimeSeries;
 
 /**
  *  A class to manage the different real-time approaches of teaser.
+ * 
+ *  Default-TEASER, S-TEASER, K-TEASER und die combined approaches werden hier trainiert
+ *  Die Klassifikationsergebnisse werden zurueckgegeben
  */
 public class TEASERClassifierRealtimeManager {
   // soll nur ein dataset betrachten
@@ -90,7 +93,7 @@ public class TEASERClassifierRealtimeManager {
     }
   }
 
-  public predictionResults[][] manageRealtime() { // ev. noch die anzätze kombinieren
+  public predictionResults[][] manageRealtime() {
     // Train the default Teaser
     defaultTeaser = new TEASERClassifierRealtime();
     Classifier.Score scoreDefaultTeaser = defaultTeaser.fit_and_measure(this.trainSamples);
@@ -101,6 +104,7 @@ public class TEASERClassifierRealtimeManager {
     predictionResults skippingTeaserResults = skippingTeaser_predict(samplingrate);
     predictionResults[] STeaserResults = STeaser_predict(samplingrate);
     predictionResults[] KTeaserResults = KTeaser_predict(samplingrate);
+
     /* // Diese Parallele Ausführung führt zu Sprüngen in der Ausführungszeit (ev. wegen der Threadverwaltung)
     // Erstelle einen ForkJoinPool
     ForkJoinPool forkJoinPool = new ForkJoinPool();
@@ -149,7 +153,7 @@ public class TEASERClassifierRealtimeManager {
   }
 
   public predictionResults defaultTeaser_predict(double samplingrate) {
-    double min_fitfrequency = defaultTeaser.min_prediction_frequency; // das sollte auch eher hier stattfinden
+    double min_fitfrequency = defaultTeaser.min_prediction_frequency; 
     
     System.out.println("DEFAULT TEASER | Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
               
@@ -159,7 +163,7 @@ public class TEASERClassifierRealtimeManager {
   }
 
   public predictionResults skippingTeaser_predict(double samplingrate) { // benutzt auch den vortrainierten default teaser
-    double min_fitfrequency = defaultTeaser.min_prediction_frequency; // das sollte auch eher hier stattfinden
+    double min_fitfrequency = defaultTeaser.min_prediction_frequency; 
     
     System.out.println("SKIPPING TEASER | Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency: " + min_fitfrequency + "Hz");
               
@@ -168,13 +172,14 @@ public class TEASERClassifierRealtimeManager {
     return new predictionResults("TEASER_Skip", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]));
   }
 
-  public predictionResults[] STeaser_predict(double samplingrate) { // gibt erstmal nur die results der besten instanz zurück
+  public predictionResults[] STeaser_predict(double samplingrate) { // gibt die results der besten instanz zurück und skipping-s-teaser
     // training von 5 instanzen
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
 
     ForkJoinPool customThreadPool = new ForkJoinPool(5);
     customThreadPool.submit(() -> IntStream.range(0, sValues.length).parallel().forEach(i -> {
+    //for(int i = 0; i < sValues.length; i++) {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
       teaserInst[i].S = sValues[i]; // teaser erhöht S um 1
       Classifier.Score score = teaserInst[i].fit_and_measure(trainSamples);
@@ -182,10 +187,10 @@ public class TEASERClassifierRealtimeManager {
       scores[i] = new double[] {score.getTrainingAccuracy(), score.getTestEarliness(), teaserInst[i].min_prediction_frequency}; // der score wird von teaser nur durch eval() gefüllt. ich schreibe die earliness nach dem predict der traindaten hinein
       // theorethisch könnte hier abgebrochen werden, wenn die min_prediction_frequency > samplingrate gilt. Weil dann eine RealtimeInstanz gefunden wurde. Ich brauche aber alle Messungen
     })).join(); // ab hier nicht mehr parallel
+    //}
 
-    // prediction auf traindaten -> beste instanz auswählen (brauche hier acc, earl, duration/min_prediction_freq)
+    // prediction auf traindaten -> beste instanz auswählen
     int instNr = getBestRealtimeInst(scores);
-    //System.out.println(Arrays.deepToString(scores));
     
     System.out.println("S TEASER | Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency (of inst): " + teaserInst[instNr].min_prediction_frequency + "Hz");
     System.out.println("Instanz " + instNr + " wurde ausgewählt. " + scores[instNr][2]);
@@ -205,13 +210,14 @@ public class TEASERClassifierRealtimeManager {
     return new predictionResults[] {result[instNr], new predictionResults("TEASER_SSkip_("+sValues[instNr]+")", pred[0][0][0], pred[2][0][0], pred[5][0][0], pred[4], getMinFrequency(pred[1][0]))}; // nur die beste instanz
   }
 
-  public predictionResults[] KTeaser_predict(double samplingrate) {
+  public predictionResults[] KTeaser_predict(double samplingrate) { // results der besten instanz und skipping-k-teaser
     // training von 5 instanzen
     TEASERClassifierRealtimeInst[] teaserInst = new TEASERClassifierRealtimeInst[5];
     double[][] scores = new double[5][3]; // acc, earl, freq
     
     ForkJoinPool customThreadPool = new ForkJoinPool(5);
     customThreadPool.submit(() -> IntStream.range(0, kValues.length).parallel().forEach(i -> {
+    //for(int i = 0; i < kValues.length; i++) {
       teaserInst[i] = new TEASERClassifierRealtimeInst();
       teaserInst[i].K = kValues[i];
       teaserInst[i].ts_len = trainSamples[0].getLength();
@@ -220,10 +226,10 @@ public class TEASERClassifierRealtimeManager {
       scores[i] = new double[] {score.getTrainingAccuracy(), score.getTestEarliness(), teaserInst[i].min_prediction_frequency * kValues[i]}; // der score wird von teaser nur durch eval() gefüllt. ich schreibe die earliness nach dem predict der traindaten hinein
       // theorethisch könnte hier abgebrochen werden, wenn die min_prediction_frequency > samplingrate gilt. Weil dann eine RealtimeInstanz gefunden wurde. Ich brauche aber alle Messungen
     })).join(); // ab hier nicht mehr parallel
+    //}
 
-    // prediction auf traindaten -> beste instanz auswählen (brauche hier acc, earl, duration/min_prediction_freq)
+    // prediction auf traindaten -> beste instanz auswählen
     int instNr = getBestRealtimeInst(scores);
-    //System.out.println(Arrays.deepToString(scores));
     
     System.out.println("K TEASER | Dataset samplingrate: " + samplingrate + "Hz | minimal fitting prediction frequency (of inst): " + teaserInst[instNr].min_prediction_frequency * kValues[instNr] + "Hz");
     System.out.println("Instanz " + instNr + " wurde ausgewählt. " + scores[instNr][2]);

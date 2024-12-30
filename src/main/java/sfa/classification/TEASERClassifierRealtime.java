@@ -156,13 +156,13 @@ public class TEASERClassifierRealtime extends Classifier {
 
     // die minimale prediction frequenz bestimmen
     double average_prediction_time_per_ts = (max_prediction_time / 1000000) / trainingSamples.length; // in ms
-    double fit_predict_frequency = 1 / ((average_prediction_time_per_ts / trainingSamples[0].getLength()) / 1000); // versuche die maximale prediction time messen, weil ich dadurch die geringste frequenz erhalte, und meine bekannte frequenz (fitting) darf nicht größer sein als die prediction frequenz sonst schätze ich die Prediction als zu schnell ein und die Anpassungen sind nicht stark genug.
+    double fit_predict_frequency = 1 / ((average_prediction_time_per_ts / trainingSamples[0].getLength()) / 1000);
     
-    // test prediction auf den trainsamples (um die langsamste frequenz zu finden)
+    // test prediction auf den trainsamples (um die langsamste frequenz zu finden, und average snapshottimes zu messen)
     double max_train_pred_duration = 0;
     for(TimeSeries trainSeries : trainingSamples) {
       long startTimetrainpred = System.nanoTime();
-      Double[] snapTimes = predict_and_measure(new TimeSeries[] {trainSeries}, 0.0, "")[5]; // brauche spter um zu messen, wie lange laengere Snapshots brauchen, ev. predict_and_measure verwenden
+      Double[] snapTimes = predict_and_measure(new TimeSeries[] {trainSeries}, 0.0, "")[5]; // brauche spaeter um zu schaetzen, wie lange laengere Snapshots brauchen
       long estimatedTimetrainpred = System.nanoTime() - startTimetrainpred;
       double estimatedMilliSecondstrainpred = (double) estimatedTimetrainpred / 1000000;
       max_train_pred_duration = max_train_pred_duration > estimatedMilliSecondstrainpred ? max_train_pred_duration : (double) estimatedMilliSecondstrainpred;
@@ -177,7 +177,7 @@ public class TEASERClassifierRealtime extends Classifier {
     for(int i = 0; i < S+1; i++) {
       avgMsPerSnapshotFit[i] = avgMsPerSnapshotFit[i] / trainingSamples.length;
     }
-    System.out.println(Arrays.toString(avgMsPerSnapshotFit));
+    //System.out.println(Arrays.toString(avgMsPerSnapshotFit));
 
     disable_earlyness = false;
     // return score
@@ -189,7 +189,7 @@ public class TEASERClassifierRealtime extends Classifier {
 
       int min = Math.max(3, MIN_WINDOW_LENGTH); // ist 3
       int max = getMax(samples, MAX_WINDOW_LENGTH); // Integer.MAX_VALUE // ist min(maxwindowlen(250), länge der längsten TS)
-      for (TimeSeries ts : samples) { // die for-loop ist von mir damit die gesamte TS betrachtet werden kann
+      for (TimeSeries ts : samples) { // MaxWindowLen wird ignoriert, damit die gesamte TS betrachtet werden kann
         max = Math.max(ts.getLength(), max);
       }
       double step = max / S; // steps of 5% // maximal 12,5 bei S=20 und WindowLen=250
@@ -201,7 +201,7 @@ public class TEASERClassifierRealtime extends Classifier {
         model.offsets[s] = (int) Math.round(step * s); // model.offsets enthält bis zu welchem Datenpunkt klassifiziert werden soll? z.b. 25, 37, 50, 62, ... // in position 0 und 1 ist der Wert -1
         TimeSeries[] data = extractUntilOffset(samples, model.offsets[s], true); // kürzt alle TS bis zum Offset
 
-        if (model.offsets[s] >= min) { // immer wahr
+        if (model.offsets[s] >= min) {
           // train the time series classifier
           Score score = this.slaveClassifier.fit(data); // accuracy der (gekürzten)trainingsdaten
           Predictions result = this.slaveClassifier.predictProbabilities(data);
@@ -407,7 +407,7 @@ public class TEASERClassifierRealtime extends Classifier {
   private int nextSnapshot(double datasetFrequency, int lastSnapshot, double elapsedPredictionTimeMs) { // currentSnapshot ist der letzte bearbeitete Snapshot
     if(model.offsets[lastSnapshot] == -1) {return lastSnapshot + 1;} // es wurde noch keine Prediction gemacht
     double currentFrequency = 1 / ((elapsedPredictionTimeMs / model.offsets[lastSnapshot]) / 1000); // aktuelle prediction frequenz bestimmen (in Hz) (am letzten snapshot)
-    if(currentFrequency > datasetFrequency) { // wenn schnell genug, dann weitermachen // (hier koennte auch getestet werden, ob wir nach dem naechsten SN noch schnell genug sind)
+    if(currentFrequency > datasetFrequency) { // wenn schnell genug, dann weitermachen 
       return lastSnapshot + 1;
     }
     // nicht schnell genug // ein databacklog muss aufgeloest werden durch ueberspringen von datenpunkten
@@ -422,11 +422,11 @@ public class TEASERClassifierRealtime extends Classifier {
         return i; // returns the next Snapshot that should be evaluated (return - currentSnapshot = number of Snapshots that should be skipped to predict with datasetFrequency)
       }
     }
-    System.out.println("ZU LANGSAM - REAL-TIME NICHT MOEGLICH " + lastSnapshot + " " + currentFrequency + " " + datasetFrequency);
+    //System.out.println("ZU LANGSAM - REAL-TIME NICHT MOEGLICH " + lastSnapshot + " " + currentFrequency + " " + datasetFrequency);
     return (int) S; // es ist nicht mehr moeglich schnell genug zu sein // ich skippe zum letzten snapshot
   }
 
-  // damit rechne ich mögliche Pausierungen des Codes duch den JavaGarbageCollector aus meiner Zeitmessung heraus
+  // Pruefen, wie stark der einfluss der garbage collection auf die messungen ist. -> genug ram verwenden damit garbage collection nur selten auftritt
   private static long getTotalGCTime() { // Aktivitätsdauer des GarbageCollectors
         long totalGCTime = 0;
         for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
@@ -472,32 +472,20 @@ public class TEASERClassifierRealtime extends Classifier {
 
     predict:
     for (int s = 0; s < model.slaveModels.length; s++) { // S + 1 Wealsel (slaves) (im normalfall 21) mit jedem durchlauf wurde auf 5% mehr daten trainiert
-      //if(testing && skip && s % 2 == 0){continue;} // jeden zweiten Snapshot überspringen
-      //if(testing && skip && s < S*0.9 && s > S*0.2){s=(int)(S*0.9);} // die ersten 90% Snapshots überspringen // damit verkaufe ich die earliness
-      if(model.masterModels[s] != null && testing && skip) {s = nextSnapshot(originalDatasetFrequency, 0 > s-1 ? 0 : s-1, ((double) (System.nanoTime() - startTimePred) / 1000000) - (getTotalGCTime() - gcStartTime));}
-      // aktuellen Snapshot überspringen, wenn wir zu langsam sind (letzter Snapshot hatte zu geringe frequenz) // Backlog verhindern
-      // muss noch sichergehen, dass s wirklich immer nur bis 21 geht. Verstehe nicht wie die Earliness 0.19 sein kann, wenn ich die ersten 10 Snapshots überspringe 1250 Samples (eoghorizontalsignal)
-      // -> vermute das ist wegen der windowlength (muss mir nochmal die earlinessberechnung anschauen)
-      // maxwindowlen auf 250 lässt nur 500 datenpunkte zur klassifikation zu. (das sollte es so nicht geben, ev. wegen performance)
-      // earliness verbessern durch mehr Snapshots
-
+      if(model.masterModels[s] != null && testing && skip) {s = nextSnapshot(originalDatasetFrequency, 0 > s-1 ? 0 : s-1, ((double) (System.nanoTime() - startTimePred) / 1000000));}
       if (model.masterModels[s] != null) { // array mit trainierten oneClassSVMs (trainingsdaten in 5% schnitten ansteigend) // die ersten beiden werden nicht trainiert (0,1 sind null)
-        //if(testing) {System.out.println("My s: " + s);}
         
         // extract samples of length offset
         TimeSeries[] data = extractUntilOffset(testSamples, model.offsets[s], testing); // die ersten beiden werte sind -1 // ich habe immer nur 1 TS gleichzeitig
-        //if(true) {System.out.println(data[0].getLength());}
-        //if(true) {System.out.println(data[0].getData().length);}
-        //if(true) {System.out.println(Arrays.toString(data[0].getData()));}
         
         // Slave Classification
         this.slaveClassifier.setModel(model.slaveModels[s]); // TODO ugly
         Predictions result = this.slaveClassifier.predictProbabilities(data); //  wahrscheinlichkeiten pro Klasse
 
         for (int ind = 0; ind < data.length; ind++) { // data sind die TS aus testSamples aber gekürzt nach dem Offset // loop einmal pro TS
-          if (predictedLabels[ind] == null) { // in den ersten beiden iterationen
-            double predictedLabel = result.labels[ind]; // label von Weasel predicted
-            double[] probabilities = result.probabilities[ind]; // die Wahrscheinlichkeiten aller Klassen von weasel predicted
+          if (predictedLabels[ind] == null) {
+            double predictedLabel = result.labels[ind]; 
+            double[] probabilities = result.probabilities[ind]; 
 
             // Master Klassifikation
             double predictNow = svm.svm_predict(
@@ -513,9 +501,6 @@ public class TEASERClassifierRealtime extends Classifier {
                   || s >= S
                   || model.offsets[s] >= testSamples[ind].getLength()) { 
                 predictedLabels[ind] = predictedLabel; // Prediction festlegen
-
-                //if(testing) {System.out.println("PREDICTION");}
-                //if(testing) {System.out.println(model.offsets[s]);}
 
                 double earliness = Math.min(1.0, ((double) model.offsets[s] / testSamples[ind].getLength()));
                 avgOffset += earliness; 
@@ -533,23 +518,21 @@ public class TEASERClassifierRealtime extends Classifier {
             }
           }
           // no predictions to be made
-          if (count == testSamples.length && !disable_earlyness) { // stoppen, wenn alle TS eine prediction haben // mit disable_earliness werden alle Snapshots predicted
-            //if(testing) {System.out.println("PREDICTION");}
+          if (count == testSamples.length && !disable_earlyness) {
             //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // Dauer bis zur entgültigen Klassifikation
             gcCurrentTime = getTotalGCTime();
             gcDuration = gcCurrentTime - gcStartTime;
             //if(gcDuration > 0) {System.out.println(gcDuration);}
-            timesPerSnapshot[s] = ((double) (System.nanoTime() - startTimePred) / 1000000) - gcDuration;
-            //if(testing) {System.out.println(Arrays.toString(timesPerSnapshot));}
+            timesPerSnapshot[s] = ((double) (System.nanoTime() - startTimePred) / 1000000);
+            
             break predict;
           }
         }
       }
-      //if(testing) {System.out.println((double) (System.nanoTime() - startTimePred) / 1000000);} // nach jeder Snapshotklassifikation ausgeben, wie lange wir schon klasifizieren
       gcCurrentTime = getTotalGCTime();
       gcDuration = gcCurrentTime - gcStartTime;
       //if(gcDuration > 0) {System.out.println(gcDuration);}
-      timesPerSnapshot[s] = ((double) (System.nanoTime() - startTimePred) / 1000000) - gcDuration;
+      timesPerSnapshot[s] = ((double) (System.nanoTime() - startTimePred) / 1000000);
     }
 
     // per Class counts

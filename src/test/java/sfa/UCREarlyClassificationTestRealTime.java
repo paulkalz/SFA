@@ -32,321 +32,18 @@ import static java.lang.Math.min;
 public class UCREarlyClassificationTestRealTime {
   
   // The datasets to use
-  public static String[] datasets = new String[]{
-          "Chinatown", // acc = 93%
-          "Coffee", // Dauert 20min auf Laptop
+  public static String[] datasets = new String[]{ // auswahl an datasets zum debuggen
+          //"Chinatown",
+          //"Coffee",
+          //"DodgerLoopWeekend",
           //"ECG200",
-          "GunPoint",
+          //"GunPoint",
           //"PLAID",
           //"SonyAIBORobotSurface1",
-          //"DodgerLoopDay", // acc = 54%, weil heaperror
+          "DodgerLoopWeekend",
           //"EOGHorizontalSignal",
   };
-  public static String[] ucr_freq_datasets = new String[]{ // 16h auf gruenau6
-          "Chinatown",
-          "DodgerLoopDay",
-          "ECG200",
-          "ECG5000",
-          "EOGHorizontalSignal",
-          "EOGVerticalSignal",
-          "GunPoint",
-          //"Phoneme",
-          "PLAID",
-          "SonyAIBORobotSurface1",
-  };
-  public static String[] datasets2 = new String[]{ 
-          "ArrowHead",
-          "Beef", 
-          "BeetleFly",
-          "BirdChicken",
-          "Car",
-          "CBF", 
-          "Chinatown",
-          "Coffee", 
-          "Fish",
-          "Fungi",
-          "GunPoint", 
-          "Ham",
-          "Herring",
-          "Meat",
-          "OliveOil",
-          "PickupGestureWiimoteZ", 
-          "PLAID", 
-          "Plane",
-          "Trace",
-          "Wine"
-  };
-  public static String[] datasets_ucr = new String[]{ 
-            //"ACSF1", 
-            //"Adiac", // Heap Error
-            //"AllGestureWiimoteX", // Heap Error
-            //"AllGestureWiimoteY", // Heap Error
-            //"AllGestureWiimoteZ", // Heap Error
-          "ArrowHead",
-          "Beef", 
-          "BeetleFly",
-          "BirdChicken",
-          "BME",
-          "Car",
-          "CBF", 
-          "Chinatown",
-            //"ChlorineConcentration", // datei ist ziemlich groß
-            //"CinCECGTorso", // datei ist ziemlich groß
-          "Coffee", 
-            //"Computers", // datei ist ziemlich groß
-            //"CricketX", // Heap Error
-            //"CricketY", // Heap Error
-            //"CricketZ", // Heap Error
-            //"Crop", // 17000 Samples dauert zu lange
-          "DiatomSizeReduction",
-          "DistalPhalanxOutlineAgeGroup",
-          "DistalPhalanxOutlineCorrect",
-          "DistalPhalanxTW",
-            "DodgerLoopDay", // Heap Error // 1300 Hz
-          "DodgerLoopGame",
-          "DodgerLoopWeekend",
-            //"Earthquakes", // datei ist ziemlich groß
-          "ECG200",
-            //"ECG5000", // datei ist ziemlich groß
-          "ECGFiveDays",
-            //"ElectricDevices", // datei ist ziemlich groß
-            "EOGHorizontalSignal", // datei ist ziemlich groß
-            "EOGVerticalSignal", // datei ist ziemlich groß
-            //"EthanolLevel", // datei ist ziemlich groß
-            //"FaceAll", // datei ist ziemlich groß
-          "FaceFour",
-            //"FacesUCR", // datei ist ziemlich groß
-            //"FiftyWords", // datei ist ziemlich groß
-          "Fish",
-            //"FordA", // datei ist ziemlich groß
-            //"FordB", // datei ist ziemlich groß
-            //"FreezerRegularTrain", // datei ist ziemlich groß
-            //"FreezerSmallTrain", // datei ist ziemlich groß
-          "Fungi",
-            //"GestureMidAirD1", // Heap Error
-            //"GestureMidAirD2", // Heap Error
-            //"GestureMidAirD3", // Heap Error
-            //"GesturePebbleZ1", // Heap Error
-            //"GesturePebbleZ2", // Heap Error
-          "GunPoint", 
-          "GunPointAgeSpan",
-          "GunPointMaleVersusFemale",
-          "GunPointOldVersusYoung",
-          "Ham",
-            //"HandOutlines", // datei ist ziemlich groß
-            //"Haptics", // datei ist ziemlich groß
-          "Herring",
-          "HouseTwenty",
-            //"InlineSkate", // datei ist ziemlich groß
-          "InsectEPGRegularTrain",
-          "InsectEPGSmallTrain",
-            //"InsectWingbeatSound", // datei ist ziemlich groß
-          "ItalyPowerDemand",
-            //"LargeKitchenAppliances", // datei ist ziemlich groß
-          "Lightning2",
-            //"Lightning7", // Heap Error
-            //"Mallat", // datei ist ziemlich groß
-          "Meat",
-          "MedicalImages",
-          "MelbournePedestrian",
-          "MiddlePhalanxOutlineAgeGroup",
-          "MiddlePhalanxOutlineCorrect",
-          "MiddlePhalanxTW",
-            //"MixedShapesRegularTrain", // datei ist ziemlich groß
-            //"MixedShapesSmallTrain", // datei ist ziemlich groß
-          "MoteStrain",
-            //"NonInvasiveFetalECGThorax1", // datei ist ziemlich groß
-            //"NonInvasiveFetalECGThorax2", // datei ist ziemlich groß
-          "OliveOil",
-            //"OSULeaf", // datei ist ziemlich groß
-            //"PhalangesOutlinesCorrect", // datei ist ziemlich groß
-            //"Phoneme", // datei ist ziemlich groß
-            //"PickupGestureWiimoteZ", // Heap Error
-            //"PigAirwayPressure", // datei ist ziemlich groß
-            //"PigArtPressure", // datei ist ziemlich groß
-            //"PigCVP", // datei ist ziemlich groß
-            //"PLAID", // datei ist ziemlich groß
-          "Plane",
-          "PowerCons",
-          "ProximalPhalanxOutlineAgeGroup",
-          "ProximalPhalanxOutlineCorrect",
-          "ProximalPhalanxTW",
-            //"RefrigerationDevices", // datei ist ziemlich groß
-            //"Rock", // Heap Error
-            //"ScreenType", // datei ist ziemlich groß
-            //"SemgHandGenderCh2", // datei ist ziemlich groß
-            //"SemgHandMovementCh2", // datei ist ziemlich groß
-            //"SemgHandSubjectCh2", // datei ist ziemlich groß
-            //"ShakeGestureWiimoteZ", // Heap Error
-          "ShapeletSim",
-            //"ShapesAll", // datei ist ziemlich groß
-            //"SmallKitchenAppliances", // datei ist ziemlich groß
-          "SmoothSubspace",
-          "SonyAIBORobotSurface1",
-          "SonyAIBORobotSurface2",
-            //"StarLightCurves", // datei ist ziemlich groß
-            //"Strawberry", // datei ist ziemlich groß
-            //"SwedishLeaf", // Heap Error
-            //"Symbols", // datei ist ziemlich groß
-          "SyntheticControl",
-          "ToeSegmentation1",
-          "ToeSegmentation2",
-          "Trace",
-          "TwoLeadECG",
-            //"TwoPatterns", // datei ist ziemlich groß
-          "UMD",
-            //"UWaveGestureLibraryAll", // datei ist ziemlich groß
-            //"UWaveGestureLibraryX", // datei ist ziemlich groß
-            //"UWaveGestureLibraryY", // datei ist ziemlich groß
-            //"UWaveGestureLibraryZ", // datei ist ziemlich groß
-            //"Wafer", // datei ist ziemlich groß
-          "Wine",
-            //"WordSynonyms", // datei ist ziemlich groß
-            //"Worms", // datei ist ziemlich groß
-            //"WormsTwoClass", // datei ist ziemlich groß
-            //"Yoga" // datei ist ziemlich groß
-  };
-  public static String[] datasets_ucr2 = new String[]{ // wurden noch nicht getested (//-----// auch noch nicht, aber weniger wichtig)
-    //-----//"ACSF1", 
-    //-----//"Adiac", // Heap Error
-    "AllGestureWiimoteX", // Heap Error
-    "AllGestureWiimoteY", // Heap Error
-    "AllGestureWiimoteZ", // Heap Error
-  //"ArrowHead",
-  //"Beef", 
-  //"BeetleFly",
-  //"BirdChicken",
-  //"BME",
-  //"Car",
-  //"CBF", 
-  //"Chinatown",
-    //"ChlorineConcentration", // datei ist ziemlich groß
-    //-----//"CinCECGTorso", // datei ist ziemlich groß
-  //"Coffee", 
-    "Computers", // datei ist ziemlich groß
-    "CricketX", // Heap Error
-    "CricketY", // Heap Error
-    "CricketZ", // Heap Error
-    //"Crop", // 17000 Samples dauert zu lange
-  //"DiatomSizeReduction",
-  //"DistalPhalanxOutlineAgeGroup",
-  //"DistalPhalanxOutlineCorrect",
-  //"DistalPhalanxTW",
-    //"DodgerLoopDay", // Heap Error // 1300 Hz
-  //"DodgerLoopGame",
-  //"DodgerLoopWeekend",
-    "Earthquakes", // datei ist ziemlich groß
-  //"ECG200",
-    "ECG5000", // datei ist ziemlich groß
-  //"ECGFiveDays",
-    "ElectricDevices", // datei ist ziemlich groß
-    "EOGHorizontalSignal", // datei ist ziemlich groß
-    "EOGVerticalSignal", // datei ist ziemlich groß
-    //-----//"EthanolLevel", // datei ist ziemlich groß
-    //"FaceAll", // datei ist ziemlich groß
-  //"FaceFour",
-    //-----//"FacesUCR", // datei ist ziemlich groß
-    //-----//"FiftyWords", // datei ist ziemlich groß
-  //"Fish",
-    "FordA", // datei ist ziemlich groß
-    "FordB", // datei ist ziemlich groß
-    //"FreezerRegularTrain", // datei ist ziemlich groß
-    //"FreezerSmallTrain", // datei ist ziemlich groß
-  //"Fungi",
-    "GestureMidAirD1", // Heap Error
-    "GestureMidAirD2", // Heap Error
-    "GestureMidAirD3", // Heap Error
-    "GesturePebbleZ1", // Heap Error
-    "GesturePebbleZ2", // Heap Error
-  //"GunPoint", 
-  //"GunPointAgeSpan",
-  //"GunPointMaleVersusFemale",
-  //"GunPointOldVersusYoung",
-  //"Ham",
-    //-----//"HandOutlines", // datei ist ziemlich groß
-    "Haptics", // datei ist ziemlich groß
-  //"Herring",
-  //"HouseTwenty",
-    "InlineSkate", // datei ist ziemlich groß
-  //"InsectEPGRegularTrain",
-  //"InsectEPGSmallTrain",
-    "InsectWingbeatSound", // datei ist ziemlich groß
-  //"ItalyPowerDemand",
-    "LargeKitchenAppliances", // datei ist ziemlich groß
-  //"Lightning2",
-    //"Lightning7", // Heap Error
-    //-----//"Mallat", // datei ist ziemlich groß
-  //"Meat",
-  //"MedicalImages",
-  //"MelbournePedestrian",
-  //"MiddlePhalanxOutlineAgeGroup",
-  //"MiddlePhalanxOutlineCorrect",
-  //"MiddlePhalanxTW",
-    //-----//"MixedShapesRegularTrain", // datei ist ziemlich groß
-    //-----//"MixedShapesSmallTrain", // datei ist ziemlich groß
-  //"MoteStrain",
-    "NonInvasiveFetalECGThorax1", // datei ist ziemlich groß
-    "NonInvasiveFetalECGThorax2", // datei ist ziemlich groß
-  //"OliveOil",
-    //-----//"OSULeaf", // datei ist ziemlich groß
-    //"PhalangesOutlinesCorrect", // datei ist ziemlich groß
-    "Phoneme", // datei ist ziemlich groß
-    "PickupGestureWiimoteZ", // Heap Error
-    "PigAirwayPressure", // datei ist ziemlich groß
-    "PigArtPressure", // datei ist ziemlich groß
-    "PigCVP", // datei ist ziemlich groß
-    "PLAID", // datei ist ziemlich groß
-  //"Plane",
-  //"PowerCons",
-  //"ProximalPhalanxOutlineAgeGroup",
-  //"ProximalPhalanxOutlineCorrect",
-  //"ProximalPhalanxTW",
-    "RefrigerationDevices", // datei ist ziemlich groß
-    //-----//"Rock", // Heap Error
-    //"ScreenType", // datei ist ziemlich groß
-    //-----//"SemgHandGenderCh2", // datei ist ziemlich groß
-    //-----//"SemgHandMovementCh2", // datei ist ziemlich groß
-    //-----//"SemgHandSubjectCh2", // datei ist ziemlich groß
-    "ShakeGestureWiimoteZ", // Heap Error
-  //"ShapeletSim",
-    //-----//"ShapesAll", // datei ist ziemlich groß
-    "SmallKitchenAppliances", // datei ist ziemlich groß
-  //"SmoothSubspace",
-  //"SonyAIBORobotSurface1",
-  //"SonyAIBORobotSurface2",
-    //-----//"StarLightCurves", // datei ist ziemlich groß
-    //-----//"Strawberry", // datei ist ziemlich groß
-    //"SwedishLeaf", // Heap Error
-    //-----//"Symbols", // datei ist ziemlich groß
-  //"SyntheticControl",
-  //"ToeSegmentation1",
-  //"ToeSegmentation2",
-  //"Trace",
-  //"TwoLeadECG",
-    //"TwoPatterns", // datei ist ziemlich groß
-  //"UMD",
-    "UWaveGestureLibraryAll", // datei ist ziemlich groß
-    "UWaveGestureLibraryX", // datei ist ziemlich groß
-    "UWaveGestureLibraryY", // datei ist ziemlich groß
-    "UWaveGestureLibraryZ", // datei ist ziemlich groß
-    //"Wafer", // datei ist ziemlich groß
-  //"Wine",
-    //-----//"WordSynonyms", // datei ist ziemlich groß
-    "Worms", // datei ist ziemlich groß
-    "WormsTwoClass", // datei ist ziemlich groß
-    //"Yoga" // datei ist ziemlich groß
-};
-public static String[] datasets_ucr2_now = new String[]{ // datasets, die aktuell gestestt werden (auswahl um speicher nicht zu ueerlasten)
-  //"AllGestureWiimoteX", // Heap Error
-  //"AllGestureWiimoteY", // Heap Error
-  //"AllGestureWiimoteZ", // Heap Error
-  //"Computers", // datei ist ziemlich groß
-  //"CricketX", // Heap Error
-  //"CricketY", // Heap Error
-  //"CricketZ", // Heap Error
-  "PLAID", // datei ist ziemlich groß
-};
-public static String[] datasets_sorted= new String[]{ // datasets nach groesse der train file sortiert
+public static String[] datasets_all = new String[]{ // ucr datasets
 "Chinatown",
 "SonyAIBORobotSurface1",
 "DodgerLoopWeekend",
@@ -406,10 +103,10 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
 "Car",
 "Rock",
 "MedicalImages",
+"GestureMidAirD1",
 "GestureMidAirD2",
 "Lightning2",
 "GestureMidAirD3",
-"GestureMidAirD1",
 "FreezerRegularTrain",
 "MiddlePhalanxOutlineCorrect",
 "DistalPhalanxOutlineCorrect",
@@ -433,49 +130,48 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
 "CricketY",
 "CricketX",
 "CricketZ",
+"PLAID", 
+"EOGHorizontalSignal",
+"EOGVerticalSignal", 
+"PigAirwayPressure", 
+"PigCVP",
+"PigArtPressure", 
+"ACSF1",
 "FiftyWords",
 "Yoga",
 "TwoPatterns",
 "PhalangesOutlinesCorrect",
 "Strawberry",
-"ACSF1",
 "Wafer",
-"Worms",
+"Worms", 
 "WormsTwoClass",
 "Haptics",
-"Earthquakes",
-"PigAirwayPressure",
-"PigCVP",
-"PigArtPressure",
-"Crop",
-"Computers",
+"Earthquakes", 
+"Crop", 
+"Computers", 
 "InlineSkate",
-"Phoneme",
-"RefrigerationDevices",
-"ScreenType",
-"UWaveGestureLibraryY",
-"UWaveGestureLibraryX",
-"UWaveGestureLibraryZ",
-"LargeKitchenAppliances",
-"SmallKitchenAppliances",
+"Phoneme", 
+"RefrigerationDevices", 
+"ScreenType", 
+"UWaveGestureLibraryY", 
+"UWaveGestureLibraryX", 
+"UWaveGestureLibraryZ", 
+"LargeKitchenAppliances", 
+"SmallKitchenAppliances", 
 "ShapesAll",
-"EOGHorizontalSignal",
-"EOGVerticalSignal",
-"PLAID",
 "SemgHandGenderCh2",
 "MixedShapesRegularTrain",
 "SemgHandSubjectCh2",
 "SemgHandMovementCh2",
 "UWaveGestureLibraryAll",
-"ElectricDevices",
+"ElectricDevices", 
 "EthanolLevel",
 "StarLightCurves",
 "NonInvasiveFetalECGThorax1",
 "NonInvasiveFetalECGThorax2",
 "FordA",
 "FordB",
-"HandOutlines",  
-
+"HandOutlines",
 };
 
   HashMap<String, Double[]> datasetFrequencys = new HashMap<String, Double[]>() {{ // echte Samplingfrequenzen der Datasets in Hz // und andere testfrequenzen
@@ -493,9 +189,10 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
       put("GunPointOldVersusYoung", new Double[] {30.0, 1000.0, 10000.0, 20000.0, 50000.0});
       put("Phoneme", new Double[] {22050.0, 1000.0, 10000.0, 20000.0, 50000.0}); // ?
       put("PLAID", new Double[] {30000.0, 1000.0, 10000.0, 20000.0, 50000.0}); // ?
-      put("SonyAIBORobotSurface1", new Double[] {123.0, 1000.0, 10000.0, 20000.0, 50000.0});
-      put("SonyAIBORobotSurface2", new Double[] {123.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("SonyAIBORobotSurface1", new Double[] {125.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("SonyAIBORobotSurface2", new Double[] {125.0, 1000.0, 10000.0, 20000.0, 50000.0});
       put("MelbournePedestrian", new Double[] {0.0002777, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("ItalyPowerDemand", new Double[] {0.0002777, 1000.0, 10000.0, 20000.0, 50000.0});
       put("ChlorineConcentration", new Double[] {0.00333, 1000.0, 10000.0, 20000.0, 50000.0}); // ?
       put("Computers", new Double[] {0.008333, 1000.0, 10000.0, 20000.0, 50000.0});
       put("CricketX", new Double[] {150.0, 1000.0, 10000.0, 20000.0, 50000.0});
@@ -527,6 +224,12 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
       put("UWaveGestureLibraryZ", new Double[] {100.0, 1000.0, 10000.0, 20000.0, 50000.0});
       put("Worms", new Double[] {25.0, 1000.0, 10000.0, 20000.0, 50000.0});
       put("WormsTwoClass", new Double[] {25.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("ACSF1", new Double[] {0.1, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("GestureMidAirD1", new Double[] {60.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("GestureMidAirD2", new Double[] {60.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("GestureMidAirD3", new Double[] {60.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("GesturePebbleZ1", new Double[] {25.0, 1000.0, 10000.0, 20000.0, 50000.0});
+      put("GesturePebbleZ2", new Double[] {25.0, 1000.0, 10000.0, 20000.0, 50000.0});
   }};
 
   // helper function
@@ -548,6 +251,8 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
       //File dir = new File("/Users/bzcschae/workspace/similarity/datasets/classification");
 
       TimeSeries.APPLY_Z_NORM = false;
+
+      // Testen, wie gross die HeapSize ist. Damit genug RAM zur verfguegung steht
       long heapSize = Runtime.getRuntime().totalMemory();
       long maxHeapSize = Runtime.getRuntime().maxMemory();
       long freeHeapSize = Runtime.getRuntime().freeMemory();
@@ -560,7 +265,7 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
       //customThreadPool.submit(() -> IntStream.range(0, n).parallel().forEach(stream -> {
         //IntStream.range(0, n).parallel().forEach(stream -> { // stream ist nur eine laufvariable
       //String s = datasets[stream];
-      for(String s : datasets_sorted) {
+      for(String s : datasets) {
         
         System.out.println("Aktuelles Dataset: " + s);
         File d = new File(dir.getAbsolutePath() + "/" + s); 
@@ -596,15 +301,13 @@ public static String[] datasets_sorted= new String[]{ // datasets nach groesse d
               // System.out.println("Start the Prediction"); 
               for(int j = 0; j < 1; j++) { // 1 Predictions pro Dataset
                 for(int i = 0; i<5; i++) { // immer 5 predictions machen (mit unterschiedlichen Frequenzen)
-                  //double test_frequency = ((datasetFrequencys.getOrDefault(s, new Double[] {})[1] - datasetFrequencys.getOrDefault(s, new Double[] {})[0])/5) * i + datasetFrequencys.getOrDefault(s, new Double[] {})[0]; // gleichverteilte werte zwischen den beiden angegebenen frequenzen
                   double test_frequency = datasetFrequencys.getOrDefault(s, new Double[] {100.0, 1000.0, 10000.0, 20000.0, 50000.0})[i];
-                  //predict_and_output(testSamples, trainSamples, s, t, "realtime", test_frequency); // die zu erreichende frequenz steigt mit jeder iteration
                   
                   TEASERClassifierRealtimeManager manager = new TEASERClassifierRealtimeManager(testSamples, trainSamples, test_frequency);
                   predictionResults[][] result = manager.manageRealtime(); // do training, prediction and output
+
                   loggingContent += "NewDatasetFrequency:_" + s +" "+ test_frequency + " " + trainSamples[0].getLength() + "\n";
                   for(predictionResults[] strategy : result) {
-                    //printtooutputfile(strategy[0].getTyp() + "\n"); // default, skipping, s, k
                      for(predictionResults variant : strategy) {
                        loggingContent += variant.getTyp() + " " + String.valueOf(variant.getAccuracy()) + " " + String.valueOf(variant.getEarlyness()) + " " + String.valueOf(variant.getPredictionTime()) + " " + String.valueOf(variant.getMinPredictionFrequency()) + "\n";
                         loggingContent += variant.getSnapshotTimesToString();
