@@ -3,8 +3,11 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-dateipfad = os.path.abspath("plot_measurements/measurements.txt") # nutzt aktuelle logs
-#dateipfad = os.path.abspath("plot_measurements/measurements_75datasets.txt") # nutzt gerade nicht die aktuelle logs
+# Skript um die Grafiken aus den Messwerten zu erzeugen
+
+
+#dateipfad = os.path.abspath("plot_measurements/measurements.txt") # nutzt aktuelle logs
+dateipfad = os.path.abspath("plot_measurements/measurements_clean_88datasets.txt")
 
 with open(dateipfad, 'r', encoding='utf-8') as datei:
     zeilen = datei.readlines()
@@ -164,7 +167,6 @@ def countInd(liste, counter_list):
         counter_list[i] += 1
     return counter_list
 
-# TODO Ich habe mich jetzt bei beiden erstmal für einen monotonen graph entschieden
 def plotAverageMeasurement(startline, ts_len,  color, label): # plots a ts with the averaged values for every processed ts in a measurement # sollte ungekürzte ts verwenden
     ts_len = int(ts_len)
     print("seaching measurement values (and averaging them) beginning from line: " + str(startline))
@@ -188,8 +190,7 @@ def plotAverageMeasurement(startline, ts_len,  color, label): # plots a ts with 
     # dann geplotted
     plt.plot(trim_duplicates(ts), linewidth=1,  color=color, label=label)
 
-# TODO Average Default ist jetzt monoton, graph gefällt mir aber nicht, ist hinten zu niedrig
-# für diese berechnung die werte nach dem Klassifikationszeitpunkt nicht abschneiden, sondern gefüllt lassen
+
 def plotAverageDefault(startline, ts_len_in, color, label): # bei den average graphen gibt es spikes, wenn viele ts fertig werden (nicht gut, graph muss monoton sein)
     ts_len = int(ts_len_in)
     print("seaching default teaser values beginning from line: " + str(startline))
@@ -496,7 +497,7 @@ def getDatasetScores(startline): # acc, early, realtime_percentage pro Methode p
             stats_line = zeilen[i].split(" ")
             name = stats_line[0].split("(")[0]
             minPredictionFrequency = float(stats_line[4]) # nicht besonders gut darzustellen
-            avgPredictionFrequency = getAvgPredictionFrequency(i, ts_len) # gibt einige ausreißer, die das bild verzerren
+            avgPredictionFrequency = getAvgPredictionFrequency(i, ts_len)
             if len(stats_line[0].split("(")) > 1:
                 name = stats_line[0].split("(")[0][:-1]
             res.append([dataset_name, current_frequency, name, float(stats_line[1]), float(stats_line[2]), getRealtimePercentage(i, float(current_frequency), ts_len), getAvgPredictionTime(i), avgPredictionFrequency]) # [dataset, freq, method, acc, earl, realtime_percentage, avgPredictionTime]
@@ -512,7 +513,7 @@ def getAllDatasetScores(): # aus dem result einen dataframe machen
             res += getDatasetScores(i)
     return res
 
-def calculateAverageBarchart(): #  min_frequency ist ein sehr schlechter wert, hat wenig aussagekraft
+def calculateAverageBarchart():
     df = pd.DataFrame(getAllDatasetScores(), columns=['Dataset', 'frequency', 'Method', 'Accuracy', 'Earliness', 'realtime_percentage', 'avg_PredictionTime', 'avgPredictionFrequency'])
     df['Accuracy'] = df['Accuracy'].astype(float)
     df['Earliness'] = df['Earliness'].astype(float)
@@ -591,4 +592,4 @@ def calculateAverageBarchart_twoAxis(): #  acc, early, avg_predictionTime # Dies
 #calculateAverageBarchart_twoAxis()
 
 
-#four_strategies_plot() # def_skip_s_sskip_k_kskip_pointsForMeasurement
+four_strategies_plot()
